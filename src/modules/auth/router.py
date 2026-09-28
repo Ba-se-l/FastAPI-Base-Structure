@@ -4,8 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.settings import settings
 from src.database import get_session
 from src.modules.user import User, UserResponse
+from src.share import MessageResponse
 from .dependencies import get_current_user
-from .schemas import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
+from .schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse
 from . import service
 
 router = APIRouter(prefix=f"{settings.api_prefix}/auth", tags=["Authentication"])
@@ -24,8 +25,9 @@ async def register(
 ) -> UserResponse:
     """Registers a new user and returns the user profile."""
     user = await service.register_user(schema=request, session=session)
-    
+
     return UserResponse.model_validate(user)
+
 
 @router.post(
     "/login",
@@ -60,30 +62,31 @@ async def refresh(
     return await service.refresh_token(schema=request, session=session)
 
 
-
 @router.post(
     "/logout",
+    response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
     summary="Logout current device",
 )
 async def logout_endpoint(
     request: RefreshRequest,
     session: AsyncSession = Depends(get_session),
-) -> dict:
+) -> MessageResponse:
     """Revokes the provided refresh token (single device logout)."""
     await service.logout(refresh_token_str=request.refresh_token, session=session)
-    return {"message": "Logged out successfully."}
+    return MessageResponse(message="Logged out successfully.")
 
 
 @router.post(
     "/logout-all",
+    response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
     summary="Logout all devices",
 )
 async def logout_all_endpoint(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> dict:
+) -> MessageResponse:
     """Revokes all refresh sessions for the current user."""
     await service.logout_all(user_id=current_user.id, session=session)
-    return {"message": "All sessions revoked successfully."}
+    return MessageResponse(message="All sessions revoked successfully.")

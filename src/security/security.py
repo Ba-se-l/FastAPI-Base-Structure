@@ -50,8 +50,9 @@ def create_access_token(user_id: int | uuid.UUID, expires_delta: timedelta | Non
     payload = TokenPayload(
         sub=str(user_id),
         type=TokenType.ACCESS,
+        jti=uuid.uuid4().hex,
         iat=now,
-        exp=now + expires_delta
+        exp=now + expires_delta,
     )
 
     """
@@ -100,7 +101,7 @@ def decode_access_token(token: str) -> TokenPayload:
 
         return payload
     
-    except jwt.PyJWKError:
+    except jwt.PyJWTError:
         raise InvalidCredentialsException()
 
 def decode_refresh_token(token: str) -> TokenPayload:
@@ -122,6 +123,6 @@ def decode_refresh_token(token: str) -> TokenPayload:
 
         return payload
 
-    except jwt.PyJWKError:
+    except jwt.PyJWTError:
         raise InvalidCredentialsException()
     

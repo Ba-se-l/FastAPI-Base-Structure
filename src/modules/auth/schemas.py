@@ -41,6 +41,31 @@ class RegisterRequest(BaseModel):
         """
         return normalize_seq(v, 'lower')
 
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """Validates that password meets enterprise security standards.
+
+        Args:
+            v: Raw password string.
+
+        Returns:
+            Validated password string.
+
+        Raises:
+            ValueError: If password lacks required character classes.
+        """
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter.")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter.")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit.")
+        special_chars = set("!@#$%^&*()_+-=[]{}|;':\",./<>?`~")
+        if not any(c in special_chars for c in v):
+            raise ValueError("Password must contain at least one special character.")
+        return v
+
 
 class LoginRequest(BaseModel):
     """Schema for user login request."""

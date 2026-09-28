@@ -46,6 +46,12 @@ class Settings(Base):
     refresh_token_expires_days: int = 30
     # ————————————————————————————
 
+    # ———————— AUDIT & LOGGING ————————
+    log_dir: str = 'logs'
+    log_to_file: bool = True
+    log_to_db: bool = True
+    # ————————————————————————————
+
 
     @model_validator(mode='after')
     def _validate_production_secrets(self) -> "Settings":
@@ -62,13 +68,23 @@ class Settings(Base):
             value: str = getattr(self, attr)
             if value.startswith('placeholder-change-it-in-production-mode'):
                 raise ValueError(
-                    f"FATAL: {attr} contans a placeholder value. "
+                    f"FATAL: {attr} contains a placeholder value. "
                     f"Set a real secret in `.env` before running in production mode."
                 )
 
         if self.echo:
             raise ValueError(
                 "FATAL: `ECHO` must be False in production to prevent SQL statement leaks."
+            )
+
+        if self.reload:
+            raise ValueError(
+                "FATAL: `RELOAD` must be False in production mode."
+            )
+
+        if '*' in self.allowed_origins:
+            raise ValueError(
+                "FATAL: `allowed_origins` must not contain wildcard '*' in production mode."
             )
 
         return self

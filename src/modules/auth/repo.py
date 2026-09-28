@@ -58,7 +58,7 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
             update(RefreshSession)
             .where(
                 RefreshSession.user_id == user_id,
-                RefreshSession.is_revoked == False,
+                RefreshSession.is_revoked.is_(False),
             )
             .values(is_revoked=True)
         )

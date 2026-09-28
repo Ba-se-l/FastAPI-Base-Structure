@@ -2,7 +2,7 @@ from .base_repo import BaseRepository
 from .base import BaseModel
 from .engine import AsyncEngineLocal, create_all_tables
 from .mixin import DateTimeMixin
-from .session import AsyncSessionLocal, get_session, inject_session
+from .session import AsyncSessionLocal, get_session
 
 
 __all__ = (
@@ -13,5 +13,4 @@ __all__ = (
     'DateTimeMixin',
     'AsyncSessionLocal',
     'get_session',
-    'inject_session', 
 )
