@@ -1,8 +1,7 @@
 import uuid
-import bcrypt
 import jwt
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
+from pwdlib import PasswordHash
 
 
 from ..exc import InvalidCredentialsException
@@ -11,31 +10,14 @@ from ..share.schemas import TokenPayload
 from ..settings import settings
 
 
-def _utf8(seq: str) -> bytes:
-    return seq.encode('utf-8')
 
 
 def hash_password(password: str) -> str:
-
-    sha256_hash = sha256(_utf8(password)).hexdigest()
-
-    salt = bcrypt.gensalt()
-
-    hashed_bytes = bcrypt.hashpw(_utf8(sha256_hash), salt)
-
-    return hashed_bytes.decode('utf-8')
+    return (PasswordHash.recommended()).hash(password=password)
 
 
 def verify_password(password: str, hashed_password: str) -> bool:
-
-    sha256_hash = sha256(_utf8(password)).hexdigest()
-
-    try:
-        return bcrypt.checkpw(_utf8(sha256_hash), _utf8(hashed_password))
-    except ValueError:
-        return False
-
-
+    return (PasswordHash.recommended()).verify(password=password, hash=hashed_password)
 
 
 def create_access_token(user_id: int | uuid.UUID, expires_delta: timedelta | None = None) -> str:
