@@ -4,11 +4,13 @@ import logging
 import uuid
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from src.database import AsyncEngineLocal, create_all_tables
+from src.database import AsyncEngineLocal, check_database_connection
 from src.exc import AppException
 from src.modules import api_router
 from src.settings import settings
@@ -26,11 +28,11 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manages application lifecycle events.
 
-    On startup: Initializes database tables.
+    On startup: Verifies database connectivity.
     On shutdown: Closes and disposes engine connection pool.
     """
-    logger.info('Initializing application database schema...')
-    await create_all_tables()
+    logger.info('Verifying database connectivity...')
+    await check_database_connection()
     logger.info('Application startup complete.')
 
     yield
@@ -94,6 +96,36 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
     )
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Global handler for schema validation errors.
+
+    Wraps FastAPI/Pydantic validation failures in unified ErrorResponse envelope.
+    """
+    request_id = getattr(request.state, 'request_id', None)
+    sanitized_errors = jsonable_encoder(exc.errors(), custom_encoder={Exception: str})
+    logger.warning(
+        'RequestValidationError on %s %s (request_id=%s): %s',
+        request.method,
+        request.url.path,
+        request_id,
+        sanitized_errors,
+    )
+    payload = ErrorResponse(
+        success=False,
+        error=ErrorDetail(
+            code='VALIDATION_ERROR',
+            message='Invalid request payload.',
+            details=sanitized_errors,
+        ),
+        request_id=request_id,
+    )
+    return JSONResponse(
+        status_code=422,
+        content=payload.model_dump(),
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Fallback handler for uncaught server errors.
@@ -129,7 +161,7 @@ async def liveness() -> dict[str, str]:
     return {
         'status': 'ok',
         'version': settings.app_version,
-        'environment': settings.environment,
+        'environment': settings.environment.value,
     }
 
 

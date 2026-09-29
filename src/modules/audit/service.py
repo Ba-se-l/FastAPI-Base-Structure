@@ -80,6 +80,8 @@ async def log_event(event: LogEvent, session: AsyncSession) -> LogResponse:
     if settings.log_to_db:
         audit_instance = await repo.create(audit_instance)
         await session.flush()
+    elif audit_instance.created_at is None:
+        audit_instance.created_at = datetime.now(timezone.utc)
 
     response = LogResponse.model_validate(audit_instance)
 

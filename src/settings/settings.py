@@ -1,5 +1,15 @@
+from enum import StrEnum
 from pydantic import model_validator
 from pydantic_settings import BaseSettings as Base, SettingsConfigDict
+
+
+class Environment(StrEnum):
+    """Runtime environment classification."""
+
+    DEV = 'dev'
+    TEST = 'test'
+    STAGING = 'staging'
+    PRO = 'pro'
 
 
 
@@ -24,7 +34,7 @@ class Settings(Base):
     allowed_origins: list[str] = ['*']
     allowed_headers: list[str] = ['*']
     allow_methods: list[str] = ['GET', 'POST', 'PATCH', 'DELETE']
-    environment: str = 'dev' # dev - pro
+    environment: Environment = Environment.DEV
 
     api_prefix: str = '/api/v1'
 
@@ -56,7 +66,7 @@ class Settings(Base):
     @model_validator(mode='after')
     def _validate_production_secrets(self) -> "Settings":
 
-        if self.environment != 'pro':
+        if self.environment != Environment.PRO:
             return self
 
         attrs = (

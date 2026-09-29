@@ -223,8 +223,7 @@ uv run pytest -k "rbac" -v
   {
     "name": "Test Engineer",
     "email": "engineer@enterprise.io",
-    "password": "StrongP@ssw0rd!",
-    "device_fingerprint": "test-runner-agent-1"
+    "password": "StrongP@ssw0rd!"
   }
   ```
 * **Response Status:** `201 Created`
@@ -263,16 +262,28 @@ uv run pytest -k "rbac" -v
   {
     "name": "Test Engineer",
     "email": "engineer2@enterprise.io",
-    "password": "simple",
-    "device_fingerprint": "test-runner-agent-1"
+    "password": "simple"
   }
   ```
 * **Response Status:** `422 Unprocessable Entity`
-* **Response Body (FastAPI Validation Error):**
+* **Response Body (`ErrorResponse` Envelope):**
   ```json
   {
-    "detail": [
-      {
+    "success": false,
+    "error": {
+      "code": "VALIDATION_ERROR",
+      "message": "Invalid request payload.",
+      "details": [
+        {
+          "type": "value_error",
+          "loc": ["body", "password"],
+          "msg": "Value error, Password must contain at least one uppercase letter."
+        }
+      ]
+    },
+    "request_id": "201d8bc8badf49f2b89a1b796adeb897"
+  }
+  ```
         "type": "value_error",
         "loc": ["body", "password"],
         "msg": "Value error, Password must contain at least one uppercase letter.",

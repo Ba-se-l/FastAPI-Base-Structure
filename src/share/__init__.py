@@ -1,4 +1,3 @@
-# for recommit changes to github
 from .enum import Roles, TokenType
 from .responses import (
     ErrorDetail,

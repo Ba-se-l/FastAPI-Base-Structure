@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .exc import UserNotFoundException
 from .model import User
 from .repo import UserRepository
-from .schema import UserUpdate
+from .schemas import UserUpdate
 
 
 async def get_user_by_id(user_id: int, session: AsyncSession) -> User:
@@ -69,7 +69,7 @@ async def update_user(
 
     update_data = schema.model_dump(exclude_unset=True)
     if update_data:
-        user = await user_repo.update(instance=user, **update_data)
+        user = await user_repo.update(instance=user, update_dict=update_data)
         await session.flush()
 
     return user

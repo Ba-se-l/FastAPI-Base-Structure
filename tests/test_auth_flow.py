@@ -9,7 +9,6 @@ async def test_auth_full_lifecycle(client: AsyncClient):
         'name': 'Test Engineer',
         'email': 'engineer@enterprise.io',
         'password': 'StrongP@ssw0rd!',
-        'device_fingerprint': 'test-runner-agent-1',
     }
 
     # 1. Register new user

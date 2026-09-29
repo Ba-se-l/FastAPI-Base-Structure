@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,8 +39,8 @@ class LogResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    """Database primary key record ID."""
+    id: int | None = None
+    """Database primary key record ID (None if database persistence is disabled)."""
 
     event_type: str
     """Categorized action tag."""
@@ -51,22 +51,22 @@ class LogResponse(BaseModel):
     message: str
     """Human-readable narrative description."""
 
-    user_id: str | None
+    user_id: str | None = None
     """Associated actor identifier."""
 
-    request_id: str | None
+    request_id: str | None = None
     """Correlation tracing ID."""
 
-    ip_address: str | None
+    ip_address: str | None = None
     """Client IP address."""
 
-    user_agent: str | None
+    user_agent: str | None = None
     """Client User-Agent header string."""
 
-    extra_data: dict[str, Any] | None
+    extra_data: dict[str, Any] | None = None
     """Arbitrary structured metadata dictionary."""
 
-    created_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     """Immutable UTC timestamp when record was persisted."""
 
 

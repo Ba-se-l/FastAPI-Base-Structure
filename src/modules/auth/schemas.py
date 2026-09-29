@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 def normalize_seq(seq: str, to: Literal['none','lower','upper'] = 'none') -> str:
@@ -14,19 +14,11 @@ class RegisterRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     """The user's full display name."""
 
-    email: str = Field(..., min_length=5, max_length=100, pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
+    email: EmailStr
     """The user's email address. Must be unique across the system."""
 
     password: str = Field(..., min_length=8, max_length=100)
     """The user's plain-text password. Will be hashed before storage."""
-
-    device_fingerprint: str = Field(
-        ...,
-        min_length=1,
-        max_length=200,
-        examples=['DEVICE_ID']
-    )
-    """Client-provided device identifier for metadata tracking."""
 
     @field_validator('email', mode='before')
     @classmethod
@@ -70,7 +62,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     """Schema for user login request."""
 
-    email: str = Field(..., pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
+    email: EmailStr
     """The user's registered email address."""
 
     password: str = Field(...)

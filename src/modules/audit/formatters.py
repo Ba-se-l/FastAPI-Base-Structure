@@ -35,8 +35,8 @@ class JsonLogFormatter(BaseLogFormatter):
     """Formats audit logs as standard JSON or JSON Lines (NDJSON)."""
 
     def format_single(self, log: LogResponse) -> str:
-        """Serializes single record as single-line JSON string."""
-        return json.dumps(log.model_dump(mode='json'), ensure_ascii=False, indent=2)
+        """Serializes single record as single-line JSON string (NDJSON)."""
+        return json.dumps(log.model_dump(mode='json'), ensure_ascii=False)
 
     def format_batch(self, logs: Sequence[LogResponse]) -> str:
         """Serializes a collection of records as a formatted JSON array."""

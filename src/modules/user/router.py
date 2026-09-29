@@ -13,7 +13,7 @@ from src.share import (
 )
 from . import service
 from .model import User
-from .schema import UserResponse, UserUpdate
+from .schemas import UserResponse, UserUpdate
 
 router = APIRouter(prefix=f"{settings.api_prefix}/users", tags=["Users"])
 
