@@ -11,6 +11,7 @@ wheels/
 .pytest_cache
 docs
 .docs
+logs
 .env
 .vscode
 pyrightconfig.json

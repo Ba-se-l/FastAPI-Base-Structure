@@ -1,7 +1,6 @@
 from .enum import ExportFormat, LogAction, LogSeverity
 from .model import AuditLog
 from .repo import AuditLogRepository
-from .router import router
 from .schemas import LogEvent, LogExportParams, LogQueryFilter, LogResponse
 from .service import (
     export_audit_logs,
@@ -11,6 +10,7 @@ from .service import (
     save_failed_event,
     save_success_event,
 )
+from .router import router
 
 __all__ = (
     'AuditLog',

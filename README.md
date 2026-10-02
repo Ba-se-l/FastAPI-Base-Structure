@@ -9,6 +9,8 @@
 
 A battle-tested, high-performance, and modular backend foundation built with **FastAPI**, **SQLAlchemy 2.0 (Async)**, and **Pydantic V2**. Designed following Domain-Driven Design (DDD-lite) principles, the Orchestrator/Specialist architectural pattern, and strict enterprise coding constitutions.
 
+> 📖 **[انقر هنا لقراءة التوثيق الشامل باللغة العربية (README_AR.md)](README_AR.md)**
+
 ---
 
 ## 📑 Table of Contents
@@ -145,6 +147,9 @@ fastapi-base-structure/
 ### 4. Audit Logging & Telemetry
 - **Multi-Sink Architecture:** Simultaneously logs critical actions to the relational database and disk storage.
 - **Strict NDJSON Compliance:** File output writes one self-contained JSON record per physical line for zero-friction ingestion by log shippers (`jq`, Filebeat, Loki).
+- **Transport-Agnostic Context (`AuditContext`):** High-performance `@dataclass(frozen=True, slots=True)` capturing client IP (with `X-Forwarded-For` reverse proxy support), User-Agent, and correlation `request_id` via FastAPI's `Depends(get_audit_context)`.
+- **Zero-Credential Leakage Guarantee:** Strict sanitization ensures passwords and credentials are never stored in audit logs (`exclude={"password"}`).
+- **State Change Diff Tracking:** `get_extra_dict_for_updates` captures granular `old` vs `new` field modifications before applying database updates.
 - **Resilient Execution:** If database persistence is disabled (`LOG_TO_DB=false`), the subsystem continues file logging safely without crashing.
 - **Export Capabilities:** Multi-format export endpoints supporting `JSON`, `TXT`, and `MARKDOWN`.
 

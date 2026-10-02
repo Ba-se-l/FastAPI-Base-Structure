@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.exc import AccessDeniedException
 from src.modules.auth.dependencies import get_current_user, require_role
 from src.settings import settings
 from src.share import (
@@ -10,6 +9,8 @@ from src.share import (
     PaginationMeta,
     PaginationParams,
     Roles,
+    AuditContext,
+    get_audit_context
 )
 from . import service
 from .model import User
@@ -71,12 +72,15 @@ async def get_user_endpoint(
     user_id: int,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    audit_ctx: AuditContext = Depends(get_audit_context)
 ) -> UserResponse:
     """Retrieves user by ID with authorization check."""
-    if current_user.role != Roles.ADMIN and current_user.id != user_id:
-        raise AccessDeniedException("You are not authorized to view this user profile.")
-
-    user = await service.get_user_by_id(user_id=user_id, session=session)
+    user = await service.get_user_by_id(
+        getter=current_user,
+        user_id=user_id,
+        session=session,
+        audit_ctx=audit_ctx
+    )
     return UserResponse.model_validate(user)
 
 
@@ -92,18 +96,14 @@ async def update_user_endpoint(
     request: UserUpdate,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    audit_ctx: AuditContext = Depends(get_audit_context)
 ) -> UserResponse:
     """Updates user information with privilege checks."""
-    if current_user.role != Roles.ADMIN and current_user.id != user_id:
-        raise AccessDeniedException("You are not authorized to modify this user.")
-
-    # Restrict role escalation: only admins can change role
-    if request.role is not None and current_user.role != Roles.ADMIN:
-        raise AccessDeniedException("Only administrators can modify user roles.")
-
     updated_user = await service.update_user(
+        updater=current_user,
         user_id=user_id,
         schema=request,
         session=session,
+        audit_ctx=audit_ctx
     )
     return UserResponse.model_validate(updated_user)

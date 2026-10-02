@@ -4,9 +4,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.settings import settings
+from src.share import AuditContext
 from .enum import ExportFormat, LogAction, LogSeverity
 from .formatters import get_formatter
 from .model import AuditLog
@@ -65,6 +67,13 @@ async def log_event(event: LogEvent, session: AsyncSession) -> LogResponse:
     """
     repo = AuditLogRepository(session=session)
 
+    # Sanitize extra_data for database JSON serialization (datetime, Enum, UUID, etc.)
+    sanitized_extra_data = (
+        jsonable_encoder(event.extra_data, custom_encoder={Exception: str})
+        if event.extra_data is not None
+        else None
+    )
+
     # 1. Build and persist to database
     audit_instance = AuditLog(
         event_type=event.event_type,
@@ -74,7 +83,7 @@ async def log_event(event: LogEvent, session: AsyncSession) -> LogResponse:
         request_id=event.request_id,
         ip_address=event.ip_address,
         user_agent=event.user_agent,
-        extra_data=event.extra_data,
+        extra_data=sanitized_extra_data,
     )
 
     if settings.log_to_db:
@@ -100,6 +109,7 @@ async def save_success_event(
     session: AsyncSession,
     event_type: str | LogAction = LogAction.CUSTOM,
     user_id: str | None = None,
+    ctx: AuditContext | None = None,
     request_id: str | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
@@ -112,9 +122,9 @@ async def save_success_event(
         severity=LogSeverity.INFO,
         message=message,
         user_id=user_id,
-        request_id=request_id,
-        ip_address=ip_address,
-        user_agent=user_agent,
+        request_id=request_id or (ctx.request_id if ctx else None),
+        ip_address=ip_address or (ctx.ip_address if ctx else None),
+        user_agent=user_agent or (ctx.user_agent if ctx else None),
         extra_data=extra_data,
     )
     return await log_event(event, session=session)
@@ -127,6 +137,7 @@ async def save_failed_event(
     event_type: str | LogAction = LogAction.SYSTEM_ERROR,
     severity: LogSeverity = LogSeverity.ERROR,
     user_id: str | None = None,
+    ctx: AuditContext | None = None,
     request_id: str | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
@@ -139,9 +150,9 @@ async def save_failed_event(
         severity=severity,
         message=message,
         user_id=user_id,
-        request_id=request_id,
-        ip_address=ip_address,
-        user_agent=user_agent,
+        request_id=request_id or (ctx.request_id if ctx else None),
+        ip_address=ip_address or (ctx.ip_address if ctx else None),
+        user_agent=user_agent or (ctx.user_agent if ctx else None),
         extra_data=extra_data,
     )
     return await log_event(event, session=session)

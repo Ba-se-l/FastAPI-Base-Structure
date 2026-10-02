@@ -168,6 +168,10 @@ Integration and service-level unit tests for the portable audit logging module:
 * **API Endpoints & RBAC (`test_audit_api_endpoints_and_rbac`)**:
   * Verifies normal users are rejected with `403 Forbidden` (`ACCESS_DENIED`) on `/api/v1/audit/logs`.
   * Verifies administrators can query paginated logs, query user-specific logs, and download file exports.
+* **Audit Context Injection & Zero Credential Leakage (`test_audit_context_and_sanitization`)**:
+  * Verifies `AuditContext` correctly injects client IP (with `X-Forwarded-For`), User-Agent, and `request_id`.
+  * Asserts user registration logs `USER_REGISTERED` with strictly sanitized payload (zero plain-text password leakage).
+  * Asserts profile updates log `USER_UPDATED` with exact `old` vs `new` diff tracking and eliminates duplicate skip logs.
 
 ---
 

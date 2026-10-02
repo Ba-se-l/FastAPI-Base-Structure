@@ -1,3 +1,4 @@
+from typing import Literal, overload
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import BaseRepository
 
@@ -11,8 +12,20 @@ class UserRepository(BaseRepository[User]):
     async def get_by_email(self, email: str) -> User | None:
         return await self.get_by_attr(email=email)
 
-    async def is_exist_by_email(self, email: str) -> bool:
-        return await self.get_by_email(email) is not None
+
+    @overload
+    async def is_exist_by_email(self, email: str, return_orm: Literal[False] = False) -> bool: ...
+    @overload
+    async def is_exist_by_email(self, email: str, return_orm: Literal[True]) -> tuple[bool, User | None]: ...
+
+    async def is_exist_by_email(self, email: str, return_orm: bool = False) -> bool | tuple[bool, User | None]:
+        user = await self.get_by_email(email)
+
+        if return_orm:
+            return (user is not None, user)
+
+        return user is not None
+
 
 
 

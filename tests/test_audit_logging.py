@@ -175,3 +175,79 @@ async def test_audit_api_endpoints_and_rbac(client: AsyncClient, db_session: Asy
     assert 'attachment; filename="user_' in export_resp.headers['content-disposition']
     assert '| ID | Timestamp (UTC) | Severity |' in export_resp.text
     assert 'SECURITY_ACCESS_DENIED' in export_resp.text
+
+
+@pytest.mark.asyncio
+async def test_audit_context_and_sanitization(client: AsyncClient, db_session: AsyncSession):
+    """Verifies AuditContext injection, password sanitization in logs, and diff tracking."""
+    from src.share import AuditContext
+    from src.modules.audit.repo import AuditLogRepository
+
+    audit_repo = AuditLogRepository(session=db_session)
+
+    # 1. Direct test of AuditContext with save_success_event
+    ctx = AuditContext(
+        ip_address="10.0.0.99",
+        user_agent="AutomatedAuditor/1.0",
+        request_id="req-ctx-test-123",
+    )
+    log = await save_success_event(
+        message="Context injection test",
+        event_type=LogAction.CUSTOM,
+        session=db_session,
+        ctx=ctx,
+    )
+    assert log.ip_address == "10.0.0.99"
+    assert log.user_agent == "AutomatedAuditor/1.0"
+    assert log.request_id == "req-ctx-test-123"
+
+    # 2. Register user via API and verify password is NOT leaked in audit logs
+    reg_payload = {
+        "name": "Audit Sanitize User",
+        "email": "audit.sanitize@example.com",
+        "password": "StrongPassword123!",
+    }
+    reg_resp = await client.post(
+        "/api/v1/auth/register",
+        json=reg_payload,
+        headers={"X-Forwarded-For": "198.51.100.42", "User-Agent": "TestClient/2.0"},
+    )
+    assert reg_resp.status_code == 201
+    created_user_id = reg_resp.json()["id"]
+
+    # Query audit logs for USER_REGISTERED
+    await db_session.commit()
+    user_logs, _ = await audit_repo.get_by_user(str(created_user_id))
+    reg_log = next((l for l in user_logs if l.event_type == LogAction.USER_REGISTERED), None)
+    assert reg_log is not None
+    assert reg_log.extra_data is not None
+    # Crucial security check: password must NEVER be in extra_data!
+    assert "password" not in reg_log.extra_data
+    assert reg_log.extra_data.get("email") == "audit.sanitize@example.com"
+    assert reg_log.ip_address == "198.51.100.42"
+    assert reg_log.user_agent == "TestClient/2.0"
+
+    # 3. Update user and verify old vs new diff and NO duplicate skip log
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "audit.sanitize@example.com", "password": "StrongPassword123!"},
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+
+    update_resp = await client.patch(
+        f"/api/v1/users/{created_user_id}",
+        json={"name": "Audit Sanitize User Updated"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert update_resp.status_code == 200
+
+    await db_session.commit()
+    user_logs_after, _ = await audit_repo.get_by_user(str(created_user_id))
+    update_logs = [l for l in user_logs_after if l.event_type == LogAction.USER_UPDATED]
+    # Verify exactly 1 update log occurred (no duplicate skip log!)
+    assert len(update_logs) == 1
+    assert update_logs[0].severity == "INFO"
+    assert "name" in update_logs[0].extra_data
+    assert update_logs[0].extra_data["name"]["old"] == "Audit Sanitize User"
+    assert update_logs[0].extra_data["name"]["new"] == "Audit Sanitize User Updated"

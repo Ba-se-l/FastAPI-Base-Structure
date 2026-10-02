@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.settings import settings
 from src.database import get_session
 from src.modules.user import User, UserResponse
-from src.share import MessageResponse
+from src.share import MessageResponse, AuditContext, get_audit_context
 from .dependencies import get_current_user
 from .schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse
 from . import service
@@ -22,9 +22,10 @@ router = APIRouter(prefix=f"{settings.api_prefix}/auth", tags=["Authentication"]
 async def register(
     request: RegisterRequest,
     session: AsyncSession = Depends(get_session),
+    audit_ctx: AuditContext = Depends(get_audit_context)
 ) -> UserResponse:
     """Registers a new user and returns the user profile."""
-    user = await service.register_user(schema=request, session=session)
+    user = await service.register_user(schema=request, session=session, audit_ctx=audit_ctx)
 
     return UserResponse.model_validate(user)
 
@@ -39,9 +40,10 @@ async def register(
 async def login(
     request: LoginRequest,
     session: AsyncSession = Depends(get_session),
+    audit_ctx: AuditContext = Depends(get_audit_context)
 ) -> TokenResponse:
     """Authenticates a user and issues a dual-token pair."""
-    return await service.login_user(schema=request, session=session)
+    return await service.login_user(schema=request, session=session, audit_ctx=audit_ctx)
 
 
 @router.post(
@@ -57,9 +59,10 @@ async def login(
 async def refresh(
     request: RefreshRequest,
     session: AsyncSession = Depends(get_session),
+    audit_ctx: AuditContext = Depends(get_audit_context)
 ) -> TokenResponse:
     """Rotates refresh token and issues a fresh token pair."""
-    return await service.refresh_token(schema=request, session=session)
+    return await service.refresh_token(schema=request, session=session, audit_ctx=audit_ctx)
 
 
 @router.post(
@@ -71,9 +74,10 @@ async def refresh(
 async def logout_endpoint(
     request: RefreshRequest,
     session: AsyncSession = Depends(get_session),
+    audit_ctx: AuditContext = Depends(get_audit_context)
 ) -> MessageResponse:
     """Revokes the provided refresh token (single device logout)."""
-    await service.logout(refresh_token_str=request.refresh_token, session=session)
+    await service.logout(refresh_token_str=request.refresh_token, session=session, audit_ctx=audit_ctx)
     return MessageResponse(message="Logged out successfully.")
 
 
@@ -86,7 +90,8 @@ async def logout_endpoint(
 async def logout_all_endpoint(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    audit_ctx: AuditContext = Depends(get_audit_context)
 ) -> MessageResponse:
     """Revokes all refresh sessions for the current user."""
-    await service.logout_all(user_id=current_user.id, session=session)
+    await service.logout_all(user_id=current_user.id, session=session, audit_ctx=audit_ctx)
     return MessageResponse(message="All sessions revoked successfully.")
