@@ -33,7 +33,6 @@ async def _get_user_by_id(
     if user is None:
         await save_failed_event(
             message=f"User with identifier ID [{user_id}] was not found.",
-            session=session,
             event_type='USER_NOT_FOUND',
             severity=LogSeverity.ERROR,
             user_id=str(user_id),
@@ -72,7 +71,6 @@ async def get_user_by_id(
                 f"User [ID: {getter.id} | Name: {getter.name}] is not authorized "
                 f"to view User [ID: {user_id}] profile."
             ),
-            session=session,
             event_type=LogAction.SECURITY_ACCESS_DENIED,
             severity=LogSeverity.WARNING,
             user_id=str(getter.id),
@@ -133,7 +131,6 @@ async def update_user(
                 f"User [ID: {updater.id} | Name: {updater.name}] is not authorized "
                 f"to modify User [ID: {user_id}]."
             ),
-            session=session,
             event_type=LogAction.SECURITY_ACCESS_DENIED,
             severity=LogSeverity.CRITICAL,
             user_id=str(updater.id),
@@ -148,7 +145,6 @@ async def update_user(
                 f"User [ID: {updater.id} | Name: {updater.name}] is not authorized "
                 f"to modify user role for User [ID: {user_id}]."
             ),
-            session=session,
             event_type=LogAction.SECURITY_ACCESS_DENIED,
             severity=LogSeverity.CRITICAL,
             user_id=str(updater.id),
@@ -169,7 +165,6 @@ async def update_user(
 
         await save_success_event(
             message=f"User profile for ID [{user_id}] updated successfully.",
-            session=session,
             event_type=LogAction.USER_UPDATED,
             user_id=str(user_id),
             ctx=audit_ctx,
@@ -179,7 +174,6 @@ async def update_user(
     else:
         await save_failed_event(
             message=f"Update skipped for user ID [{user_id}]; update dict was empty.",
-            session=session,
             event_type=LogAction.USER_UPDATED,
             severity=LogSeverity.WARNING,
             user_id=str(user_id),
@@ -214,7 +208,6 @@ async def deactivate_user(
 
     await save_success_event(
         message=f"User account deactivated successfully [ID: {user_id}].",
-        session=session,
         event_type=LogAction.USER_DEACTIVATED,
         user_id=str(user_id),
         ctx=audit_ctx,

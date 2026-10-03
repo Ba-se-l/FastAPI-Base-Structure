@@ -9,12 +9,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.database import AsyncEngineLocal, check_database_connection
 from src.exc import AppException
 from src.modules import api_router
 from src.settings import settings
-from src.share import ErrorDetail, ErrorResponse
+from src.share import ErrorDetail, ErrorResponse, _HTTP_ERROR_CODE_MAP
 
 # Configure structured logging
 logging.basicConfig(
@@ -68,6 +69,55 @@ async def request_context_middleware(request: Request, call_next):
     response = await call_next(request)
     response.headers['X-Request-ID'] = request_id
     return response
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """Global handler for Starlette and FastAPI native HTTPExceptions.
+
+    Intercepts framework-level errors (404 Not Found, 405 Method Not Allowed,
+    401 Unauthorized from OAuth2 scheme) and packages them into the unified
+    ErrorResponse envelope, ensuring 100% API contract compliance.
+
+    Args:
+        request: The incoming HTTP request instance.
+        exc: The raised Starlette/FastAPI HTTPException.
+
+    Returns:
+        JSONResponse adhering to the unified ErrorResponse schema.
+    """
+    request_id = getattr(request.state, 'request_id', None)
+    logger.warning(
+        'HTTPException [%s] on %s %s: %s (request_id=%s)',
+        exc.status_code,
+        request.method,
+        request.url.path,
+        exc.detail,
+        request_id,
+    )
+
+    default_code = _HTTP_ERROR_CODE_MAP.get(exc.status_code, f"HTTP_{exc.status_code}")
+    if isinstance(exc.detail, dict):
+        message = str(exc.detail.get("message", "An HTTP error occurred."))
+        code = str(exc.detail.get('code', default_code))
+        details = exc.detail.get('details', None)
+    else:
+        message = str(exc.detail) if exc.detail else "An HTTP error occurred."
+        code = default_code
+        details = None
+
+    payload = ErrorResponse(
+        success=False,
+        error=ErrorDetail(code=code, message=message, details=details),
+        request_id=request_id,
+    )
+
+    headers = getattr(exc, "headers", None)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=payload.model_dump(),
+        headers=headers
+    )
 
 
 @app.exception_handler(AppException)
@@ -155,9 +205,19 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 
 # Health check endpoints
-@app.get('/health', tags=['Health'], summary='Liveness probe')
+@app.get(
+    '/health',
+    tags=['Health'],
+    summary='Liveness probe',
+    description='Returns raw un-enveloped JSON per Kubernetes liveness probe conventions.',
+)
 async def liveness() -> dict[str, str]:
-    """Liveness probe confirming application process is running."""
+    """Liveness probe confirming application process is running.
+
+    Contract Exemption:
+        Returns plain JSON (un-enveloped) to satisfy standard container orchestration
+        and load-balancer health probe specifications (Kubernetes, AWS ALB, Docker).
+    """
     return {
         'status': 'ok',
         'version': settings.app_version,
@@ -165,9 +225,19 @@ async def liveness() -> dict[str, str]:
     }
 
 
-@app.get('/health/ready', tags=['Health'], summary='Readiness probe')
+@app.get(
+    '/health/ready',
+    tags=['Health'],
+    summary='Readiness probe',
+    description='Returns raw un-enveloped JSON per Kubernetes readiness probe conventions.',
+)
 async def readiness() -> JSONResponse:
-    """Readiness probe verifying database connectivity."""
+    """Readiness probe verifying database connectivity.
+
+    Contract Exemption:
+        Returns plain JSON with standard HTTP 200 or 503 to signal service readiness
+        directly to infrastructure ingress/mesh layers without parsing envelope structures.
+    """
     try:
         async with AsyncEngineLocal.connect() as conn:
             await conn.execute(text('SELECT 1'))

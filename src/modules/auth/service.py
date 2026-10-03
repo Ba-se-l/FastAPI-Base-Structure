@@ -8,6 +8,7 @@ from src.security import (
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
+    SECURITY_PASSWORD_HASH,
 )
 from src.share import AuditContext
 from src.exc import (
@@ -62,7 +63,6 @@ async def _issue_token_pair(
 
     await save_success_event(
         message="Access & refresh token pair generated successfully.",
-        session=session,
         event_type=LogAction.CUSTOM,
         user_id=str(user_id),
         ctx=ctx,
@@ -105,7 +105,6 @@ async def register_user(
     if is_user_exist and user is not None:
         await save_failed_event(
             message=f"User creation failed: email [{user.email}] already exists.",
-            session=session,
             event_type=LogAction.USER_REGISTERED,
             severity=LogSeverity.ERROR,
             user_id=str(user.id),
@@ -129,10 +128,8 @@ async def register_user(
         user = await user_repo.create(instance=instance)
         await session.flush()
     except IntegrityError as ie:
-        await session.rollback()
         await save_failed_event(
             message="User creation failed due to duplicate entry or constraint error.",
-            session=session,
             event_type=LogAction.USER_REGISTERED,
             severity=LogSeverity.CRITICAL,
             user_id=None,
@@ -147,8 +144,7 @@ async def register_user(
         event_type=LogAction.USER_REGISTERED,
         user_id=str(user.id),
         ctx=audit_ctx,
-        # extra_data={"email": user.email, "name": user.name, "pwd": schema.password},
-        extra_data={"email": user.email, "name": user.name,},
+        extra_data={"email": user.email, "name": user.name},
     )
 
     return user
@@ -184,9 +180,10 @@ async def login_user(
     # Step 1: Fetch user by email
     user = await user_repo.get_by_email(schema.email)
     if user is None:
+        verify_password(schema.password, SECURITY_PASSWORD_HASH)
+
         await save_failed_event(
             message=f"User login failed: email [{schema.email}] not found.",
-            session=session,
             event_type=LogAction.AUTH_LOGIN_FAILED,
             severity=LogSeverity.ERROR,
             user_id=None,
@@ -203,7 +200,6 @@ async def login_user(
     if not is_hashed_match:
         await save_failed_event(
             message=f"User login failed: invalid password for [{schema.email}].",
-            session=session,
             event_type=LogAction.AUTH_LOGIN_FAILED,
             severity=LogSeverity.ERROR,
             user_id=str(user.id),
@@ -216,7 +212,6 @@ async def login_user(
     if not user.is_active:
         await save_failed_event(
             message=f"User login failed: account for [{user.email}] is deactivated.",
-            session=session,
             event_type=LogAction.AUTH_LOGIN_FAILED,
             severity=LogSeverity.CRITICAL,
             user_id=str(user.id),
@@ -227,7 +222,6 @@ async def login_user(
 
     await save_success_event(
         message=f"User with ID [{user.id}] authenticated successfully.",
-        session=session,
         event_type=LogAction.AUTH_LOGIN_SUCCESS,
         user_id=str(user.id),
         ctx=audit_ctx,
@@ -337,27 +331,11 @@ async def refresh_token(
     if existing_session is None:
         await save_failed_event(
             message="Refresh token session not found.",
-            session=session,
             event_type=LogAction.AUTH_TOKEN_REVOKED,
             severity=LogSeverity.ERROR,
             user_id=str(payload.sub),
             ctx=audit_ctx,
             extra_data={"reason": "SESSION_NOT_FOUND"},
-        )
-        raise TokenRevokedException()
-
-    if existing_session.is_revoked:
-        # Potential token theft — revoke all sessions for this user
-        await refresh_repo.revoke_all_for_user(user_id=user_id)
-
-        await save_failed_event(
-            message=f"Revoked refresh token re-use detected for user [{user_id}] (possible token theft).",
-            session=session,
-            event_type=LogAction.AUTH_TOKEN_REVOKED,
-            severity=LogSeverity.CRITICAL,
-            user_id=str(payload.sub),
-            ctx=audit_ctx,
-            extra_data={"session_id": existing_session.id, "reason": "TOKEN_REPLAY_ATTACK"},
         )
         raise TokenRevokedException()
 
@@ -368,17 +346,34 @@ async def refresh_token(
     if expires_at < datetime.now(timezone.utc):
         await save_failed_event(
             message=f"Refresh token session [{existing_session.id}] expired.",
-            session=session,
             event_type=LogAction.AUTH_TOKEN_REVOKED,
             severity=LogSeverity.ERROR,
             user_id=str(payload.sub),
             ctx=audit_ctx,
-            extra_data={"session_id": existing_session.id, "reason": "SESSION_EXPIRED"},
+            extra_data={
+                "session_id": existing_session.id,
+                "reason": "SESSION_EXPIRED",
+            },
         )
         raise TokenRevokedException()
 
-    # Step 4: Revoke the old session (rotation)
-    await refresh_repo.revoke_by_jti(jti=jti)  # type: ignore
+    # Step 4: Atomic CAS revocation (prevents concurrent double-successor race condition)
+    revoked = await refresh_repo.revoke_if_active(jti=jti)
+    if not revoked:
+        # Session was already revoked concurrently or reused — potential token theft
+        await refresh_repo.revoke_all_for_user(user_id=user_id)
+        await save_failed_event(
+            message=f"Revoked refresh token re-use detected for user [{user_id}] (possible token theft).",
+            event_type=LogAction.AUTH_TOKEN_REVOKED,
+            severity=LogSeverity.CRITICAL,
+            user_id=str(payload.sub),
+            ctx=audit_ctx,
+            extra_data={
+                "session_id": existing_session.id,
+                "reason": "TOKEN_REPLAY_ATTACK",
+            },
+        )
+        raise TokenRevokedException()
 
     await save_success_event(
         message="Token pair refreshed and rotated successfully.",

@@ -33,6 +33,33 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
         """
         return await self.get_by_attr(refresh_token_jti=jti)
 
+
+    async def revoke_if_active(self, jti: str) -> bool:
+        """Atomically revokes a refresh session only if it is currently active.
+
+        This guarantees atomic Compare-And-Swap (CAS) semantics to prevent
+        race conditions where two concurrent requests rotate the same token.
+
+        Args:
+            jti: The JWT ID string to revoke.
+
+        Returns:
+            True if the session was successfully revoked (affected rows > 0),
+            False if it was already revoked or not found.
+        """
+        stmt = (
+            update(RefreshSession)
+            .where(
+                RefreshSession.refresh_token_jti == jti,
+                RefreshSession.is_revoked.is_(False),
+            )
+            .values(is_revoked=True)
+        )
+
+        result = await self.session.execute(stmt)
+        return (result.rowcount or 0) > 0
+
+
     async def revoke_by_jti(self, jti: str) -> None:
         """Revokes a single refresh session by JTI.
 

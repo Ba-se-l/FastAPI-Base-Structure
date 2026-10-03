@@ -1,3 +1,4 @@
+from typing import Any
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -106,3 +107,27 @@ class AuditLogRepository(BaseRepository[AuditLog]):
         """
         items, _ = await self.query_logs(filter_params, offset=0, limit=max_records)
         return items
+
+
+    async def update(self, instance: AuditLog, update_dict: dict[str, Any]) -> AuditLog:
+        """Prohibits updating audit logs to preserve historical audit trail integrity.
+
+        Args:
+            instance: The target AuditLog instance.
+            update_dict: Key-value attributes intended for update.
+
+        Raises:
+            NotImplementedError: Always, audit records are strictly immutable.
+        """
+        raise NotImplementedError("AuditLog records are immutable and cannot be updated.")
+
+    async def delete(self, instance: AuditLog) -> bool:
+        """Prohibits deleting audit logs to preserve historical audit trail integrity.
+
+        Args:
+            instance: The target AuditLog instance to delete.
+
+        Raises:
+            NotImplementedError: Always, audit records are strictly immutable.
+        """
+        raise NotImplementedError("AuditLog records are immutable and cannot be deleted.")

@@ -23,9 +23,15 @@ TestSessionLocal = async_sessionmaker(
 )
 
 
+import src.database.session
+import src.modules.audit.service
+
+
 @pytest_asyncio.fixture(autouse=True)
-async def init_test_database():
-    """Initializes a fresh schema for each test session."""
+async def init_test_database(monkeypatch):
+    """Initializes a fresh schema for each test session and binds AsyncSessionLocal to test_engine."""
+    monkeypatch.setattr(src.database.session, "AsyncSessionLocal", TestSessionLocal)
+    monkeypatch.setattr(src.modules.audit.service, "AsyncSessionLocal", TestSessionLocal)
     async with test_engine.begin() as conn:
         await conn.run_sync(BaseModel.metadata.create_all)
     yield

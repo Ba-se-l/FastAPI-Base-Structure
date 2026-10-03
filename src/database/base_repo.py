@@ -76,10 +76,13 @@ class BaseRepository(Generic[_O]):
         )
         total = count_result.scalar_one()
 
-        # Data query
-        result = await self.session.execute(
-            select(self.model).offset(offset).limit(limit)
-        )
+        # Data query with deterministic order by primary key/identifier
+        stmt = select(self.model)
+        if hasattr(self.model, "id"):
+            stmt = stmt.order_by(self.model.id)
+
+        stmt = stmt.offset(offset).limit(limit)
+        result = await self.session.execute(stmt)
         items = list(result.scalars().all())
 
         return items, total

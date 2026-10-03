@@ -7,6 +7,7 @@ from typing import Any
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.database import AsyncSessionLocal
 from src.settings import settings
 from src.share import AuditContext
 from .enum import ExportFormat, LogAction, LogSeverity
@@ -55,17 +56,19 @@ def _append_to_file_sync(log_dir: str, log_resp: LogResponse) -> None:
         logger.warning('Failed to append audit log to disk: %s', exc)
 
 
-async def log_event(event: LogEvent, session: AsyncSession) -> LogResponse:
+async def log_event(
+    event: LogEvent,
+    session: AsyncSession | None = None,
+) -> LogResponse:
     """Central maestro orchestrating audit logging across database and file storage.
 
     Args:
         event: Validated LogEvent payload.
-        session: Active async database session.
+        session: Optional active async database session. If None, an autonomous session is created and committed.
 
     Returns:
         Persisted LogResponse representation.
     """
-    repo = AuditLogRepository(session=session)
 
     # Sanitize extra_data for database JSON serialization (datetime, Enum, UUID, etc.)
     sanitized_extra_data = (
@@ -87,9 +90,18 @@ async def log_event(event: LogEvent, session: AsyncSession) -> LogResponse:
     )
 
     if settings.log_to_db:
-        audit_instance = await repo.create(audit_instance)
-        await session.flush()
-    elif audit_instance.created_at is None:
+        if session is not None:
+            repo = AuditLogRepository(session=session)
+            audit_instance = await repo.create(audit_instance)
+            await session.flush()
+        else:
+            async with AsyncSessionLocal() as audit_session:
+                repo = AuditLogRepository(session=audit_session)
+                audit_instance = await repo.create(audit_instance)
+                await audit_session.commit()
+                await audit_session.refresh(audit_instance)
+
+    if audit_instance.created_at is None:
         audit_instance.created_at = datetime.now(timezone.utc)
 
     response = LogResponse.model_validate(audit_instance)
@@ -106,7 +118,7 @@ async def log_event(event: LogEvent, session: AsyncSession) -> LogResponse:
 async def save_success_event(
     message: str,
     *,
-    session: AsyncSession,
+    session: AsyncSession | None = None,
     event_type: str | LogAction = LogAction.CUSTOM,
     user_id: str | None = None,
     ctx: AuditContext | None = None,
@@ -133,7 +145,7 @@ async def save_success_event(
 async def save_failed_event(
     message: str,
     *,
-    session: AsyncSession,
+    session: AsyncSession | None = None,
     event_type: str | LogAction = LogAction.SYSTEM_ERROR,
     severity: LogSeverity = LogSeverity.ERROR,
     user_id: str | None = None,
