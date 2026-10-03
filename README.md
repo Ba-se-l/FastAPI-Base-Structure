@@ -15,23 +15,30 @@ A battle-tested, high-performance, and modular backend foundation built with **F
 
 ## 📑 Table of Contents
 
-- [Architectural Philosophy](#-architectural-philosophy)
-- [Directory Structure](#-directory-structure)
-- [Core Features & Subsystems](#-core-features--subsystems)
-  - [Authentication & JWT Lifecycle](#1-authentication--jwt-lifecycle)
-  - [Role-Based Access Control (RBAC)](#2-role-based-access-control-rbac)
-  - [Database & Async Alembic Migrations](#3-database--async-alembic-migrations)
-  - [Audit Logging & Telemetry](#4-audit-logging--telemetry)
-  - [Unified API Envelopes](#5-unified-api-envelopes)
-- [Quickstart Guide](#-quickstart-guide)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Environment Configuration](#environment-configuration)
-  - [Database Migrations](#database-migrations)
-  - [Running the Application](#running-the-application)
-- [Testing Suite](#-testing-suite)
-- [Developer Guide: Adding a New Domain Module](#-developer-guide-adding-a-new-domain-module)
-- [License](#-license)
+- [🚀 Enterprise FastAPI Base Structure Foundation (v1.0.0)](#-enterprise-fastapi-base-structure-foundation-v100)
+  - [📑 Table of Contents](#-table-of-contents)
+  - [🏛 Architectural Philosophy](#-architectural-philosophy)
+  - [📂 Directory Structure](#-directory-structure)
+  - [⚡ Core Features \& Subsystems](#-core-features--subsystems)
+    - [1. Authentication \& JWT Lifecycle](#1-authentication--jwt-lifecycle)
+    - [2. Role-Based Access Control (RBAC)](#2-role-based-access-control-rbac)
+    - [3. Database \& Async Alembic Migrations](#3-database--async-alembic-migrations)
+    - [4. Audit Logging \& Telemetry](#4-audit-logging--telemetry)
+    - [5. Unified API Envelopes](#5-unified-api-envelopes)
+  - [🚀 Quickstart Guide](#-quickstart-guide)
+    - [Prerequisites](#prerequisites)
+    - [Installation](#installation)
+    - [Environment Configuration](#environment-configuration)
+    - [Database Migrations](#database-migrations)
+    - [Running the Application](#running-the-application)
+  - [🧪 Testing Suite](#-testing-suite)
+  - [🛠 Developer Guide: Adding a New Domain Module](#-developer-guide-adding-a-new-domain-module)
+    - [Step 1: Create the Directory](#step-1-create-the-directory)
+    - [Step 2: Define the Model (`src/modules/products/model.py`)](#step-2-define-the-model-srcmodulesproductsmodelpy)
+    - [Step 3: Define Schemas \& Repository](#step-3-define-schemas--repository)
+    - [Step 4: Implement Service \& Router](#step-4-implement-service--router)
+    - [Step 5: Mount Router \& Register Migration](#step-5-mount-router--register-migration)
+  - [📄 License](#-license)
 
 ---
 
@@ -290,7 +297,7 @@ class Product(BaseModel, DateTimeMixin):
 
   class ProductRepository(BaseRepository[Product]):
       def __init__(self, session):
-          super().__init__(model=Product, session=session)
+          super().__init__(class_=Product, session=session)
   ```
 
 ### Step 4: Implement Service & Router

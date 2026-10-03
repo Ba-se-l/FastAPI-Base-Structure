@@ -147,7 +147,8 @@ async def register_user(
         event_type=LogAction.USER_REGISTERED,
         user_id=str(user.id),
         ctx=audit_ctx,
-        extra_data={"email": user.email, "name": user.name, "pwd": schema.password},
+        # extra_data={"email": user.email, "name": user.name, "pwd": schema.password},
+        extra_data={"email": user.email, "name": user.name,},
     )
 
     return user
