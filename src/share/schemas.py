@@ -1,6 +1,7 @@
 from typing_extensions import TypedDict
-from dataclasses import dataclass
-from datetime import datetime
+from typing import Any
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pydantic import BaseModel as Base
 from .enum import TokenType
 
@@ -31,6 +32,11 @@ class TokenPayload(Base):
     exp: datetime
 
 
+class TokenResponse(Base):
+    access_token: str
+    refresh_token: str
+    token_type: str = 'Bearer'
+
 @dataclass(frozen=True, slots=True)
 class AuditContext:
     ip_address: str | None = None
@@ -47,7 +53,16 @@ class AuditContextDict(TypedDict, total=True):
     """Request ID"""
 
 
-class TokenResponse(Base):
-    access_token: str
-    refresh_token: str
-    token_type: str = 'Bearer'
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DomainEvent:
+    """Immutable base for every domain fact published on the event bus.
+
+    Subclasses MUST be declared with ``kw_only=True`` so they can define
+    required fields without violating dataclass default-ordering rules.
+    """
+
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    """UTC timestamp at which the fact occurred."""
+
+    audit_ctx: AuditContext | None = None
+    """Request telemetry (IP, user agent, request ID) captured at publish time."""

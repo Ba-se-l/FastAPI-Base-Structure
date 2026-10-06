@@ -1,10 +1,17 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.share import Roles, AuditContext, get_extra_dict_for_updates
-from src.modules.audit import save_success_event, save_failed_event, LogAction, LogSeverity
 from src.exc import AccessDeniedException
+from src.share import AuditContext, Roles, UserAction, get_extra_dict_for_updates, event_bus
 
-from .exc import UserNotFoundException
+from .events import (
+    UserAccessDenied,
+    UserDeactivated,
+    UserInactiveTargeted,
+    UserNotFound,
+    UserUpdated,
+    UserUpdateSkipped,
+)
+from .exc import UserInactiveException, UserNotFoundException
 from .model import User
 from .repo import UserRepository
 from .schemas import UserUpdate
@@ -31,13 +38,7 @@ async def _get_user_by_id(
     user_repo = UserRepository(session=session)
     user = await user_repo.get_by_id(user_id)
     if user is None:
-        await save_failed_event(
-            message=f"User with identifier ID [{user_id}] was not found.",
-            event_type='USER_NOT_FOUND',
-            severity=LogSeverity.ERROR,
-            user_id=str(user_id),
-            ctx=ctx,
-        )
+        await event_bus.publish(event=UserNotFound(audit_ctx=ctx, user_id=user_id))
         raise UserNotFoundException(identifier=str(user_id))
 
     return user
@@ -66,17 +67,16 @@ async def get_user_by_id(
     """
     # Security Rule: Authorize BEFORE querying to prevent User Enumeration attacks
     if getter.role != Roles.ADMIN and getter.id != user_id:
-        await save_failed_event(
-            message=(
-                f"User [ID: {getter.id} | Name: {getter.name}] is not authorized "
-                f"to view User [ID: {user_id}] profile."
-            ),
-            event_type=LogAction.SECURITY_ACCESS_DENIED,
-            severity=LogSeverity.WARNING,
-            user_id=str(getter.id),
-            ctx=audit_ctx,
+        await event_bus.publish(
+            event=UserAccessDenied(
+                audit_ctx=audit_ctx,
+                actor_id=getter.id,
+                actor_name=getter.name,
+                target_user_id=user_id,
+                action=UserAction.VIEW,
+            )
         )
-        raise AccessDeniedException("You are not authorized to view this profile.")
+        raise AccessDeniedException('You are not authorized to view this profile.')
 
     return await _get_user_by_id(user_id=user_id, session=session, ctx=audit_ctx)
 
@@ -123,38 +123,50 @@ async def update_user(
     Raises:
         AccessDeniedException: If updater is not Admin and not modifying self, or attempting role escalation.
         UserNotFoundException: If no user exists with the given ID.
+        UserInactiveException: If target user account is deactivated.
     """
     # 1. Authorize: Only Admin or Self can modify
     if updater.role != Roles.ADMIN and updater.id != user_id:
-        await save_failed_event(
-            message=(
-                f"User [ID: {updater.id} | Name: {updater.name}] is not authorized "
-                f"to modify User [ID: {user_id}]."
-            ),
-            event_type=LogAction.SECURITY_ACCESS_DENIED,
-            severity=LogSeverity.CRITICAL,
-            user_id=str(updater.id),
-            ctx=audit_ctx,
+        await event_bus.publish(
+            event=UserAccessDenied(
+                audit_ctx=audit_ctx,
+                actor_id=updater.id,
+                actor_name=updater.name,
+                target_user_id=user_id,
+                action=UserAction.MODIFY,
+            )
         )
-        raise AccessDeniedException("You are not authorized to modify this user.")
+        raise AccessDeniedException('You are not authorized to modify this user.')
 
     # 2. Authorize: Role escalation restriction
     if schema.role is not None and updater.role != Roles.ADMIN:
-        await save_failed_event(
-            message=(
-                f"User [ID: {updater.id} | Name: {updater.name}] is not authorized "
-                f"to modify user role for User [ID: {user_id}]."
-            ),
-            event_type=LogAction.SECURITY_ACCESS_DENIED,
-            severity=LogSeverity.CRITICAL,
-            user_id=str(updater.id),
-            ctx=audit_ctx,
+        await event_bus.publish(
+            event=UserAccessDenied(
+                audit_ctx=audit_ctx,
+                actor_id=updater.id,
+                actor_name=updater.name,
+                target_user_id=user_id,
+                action=UserAction.CHANGE_ROLE,
+            )
         )
-        raise AccessDeniedException("Only Administrators can modify user roles.")
+        raise AccessDeniedException('Only Administrators can modify user roles.')
 
     # 3. Retrieve target user
     user = await _get_user_by_id(user_id=user_id, session=session, ctx=audit_ctx)
     user_repo = UserRepository(session=session)
+
+    # 3.5 Verify user is active
+    if not user.is_active:
+        await event_bus.publish(
+            event=UserInactiveTargeted(
+                audit_ctx=audit_ctx,
+                actor_id=updater.id,
+                actor_name=updater.name,
+                target_user_id=user_id,
+                action=UserAction.MODIFY,
+            )
+        )
+        raise UserInactiveException(identifier=str(user_id))
 
     # 4. Apply updates with pre-update snapshot
     update_dict = schema.model_dump(exclude_unset=True)
@@ -163,24 +175,23 @@ async def update_user(
         user = await user_repo.update(instance=user, update_dict=update_dict)
         await session.flush()
 
-        await save_success_event(
-            message=f"User profile for ID [{user_id}] updated successfully.",
-            event_type=LogAction.USER_UPDATED,
-            user_id=str(user_id),
-            ctx=audit_ctx,
-            extra_data=get_extra_dict_for_updates(update_dict=update_dict, old_state=old_state),
+        await event_bus.publish(
+            event=UserUpdated(
+                audit_ctx=audit_ctx,
+                user_id=user_id,
+                changes=get_extra_dict_for_updates(update_dict=update_dict, old_state=old_state),
+            ),
+            session=session,
         )
         return user
-    else:
-        await save_failed_event(
-            message=f"Update skipped for user ID [{user_id}]; update dict was empty.",
-            event_type=LogAction.USER_UPDATED,
-            severity=LogSeverity.WARNING,
-            user_id=str(user_id),
-            ctx=audit_ctx,
-            extra_data=get_extra_dict_for_updates(update_dict={}),
+
+    await event_bus.publish(
+        event=UserUpdateSkipped(
+            audit_ctx=audit_ctx,
+            user_id=user_id,
         )
-        return user
+    )
+    return user
 
 
 async def deactivate_user(
@@ -206,12 +217,12 @@ async def deactivate_user(
     user = await user_repo.update(instance=user, update_dict={'is_active': False})
     await session.flush()
 
-    await save_success_event(
-        message=f"User account deactivated successfully [ID: {user_id}].",
-        event_type=LogAction.USER_DEACTIVATED,
-        user_id=str(user_id),
-        ctx=audit_ctx,
-        extra_data={'is_active': {'old': True, 'new': False}},
+    await event_bus.publish(
+        event=UserDeactivated(
+            audit_ctx=audit_ctx,
+            user_id=user_id,
+        ),
+        session=session,
     )
 
     return user

@@ -60,6 +60,9 @@ class Settings(Base):
     log_dir: str = 'logs'
     log_to_file: bool = True
     log_to_db: bool = True
+
+    audit_enabled: bool = True
+
     # ————————————————————————————
 
 

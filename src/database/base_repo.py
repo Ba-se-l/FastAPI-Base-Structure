@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime, timezone
 from typing import Generic, TypeVar, Any
-from uuid import UUID
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,11 +29,11 @@ class BaseRepository(Generic[_O]):
         self.model = class_
         self.session = session
 
-    async def get_by_id(self, id: UUID | int) -> _O | None:
+    async def get_by_id(self, id: int) -> _O | None:
         """Fetches a single record by its primary key.
 
         Args:
-            id: The primary key value (UUID or integer).
+            id: The primary key value.
 
         Returns:
             The ORM instance or ``None`` if not found.

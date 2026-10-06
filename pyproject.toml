@@ -9,18 +9,16 @@ dependencies = [
     "alembic>=1.19.1",
     "asyncpg>=0.31.0",
     "fastapi>=0.141.1",
-    "httpx>=0.28.1",
     "pydantic[email]>=2.13.4",
     "pydantic-settings>=2.15.0",
     "sqlalchemy[asyncio]>=2.0.52",
     "uvicorn>=0.52.4",
     "pyjwt>=2.13.0",
-    "bcrypt>=5.0.0",
-    "python-multipart>=0.0.32",
     "pwdlib[argon2]>=0.3.1",
 ]
 
 [tool.pyright]
+extraPaths = ["."]
 venvPath = "."
 venv = ".venv"
 
@@ -28,6 +26,8 @@ venv = ".venv"
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "python-multipart>=0.0.32",
+    "httpx>=0.28.1",
 ]
 
 [tool.pytest.ini_options]

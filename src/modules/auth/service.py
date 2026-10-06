@@ -1,29 +1,51 @@
 from datetime import datetime, timedelta, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
 
-from src.security import (
-    hash_password,
-    verify_password,
-    create_access_token,
-    create_refresh_token,
-    decode_refresh_token,
-    SECURITY_PASSWORD_HASH,
-)
-from src.share import AuditContext
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.exc import (
     InvalidCredentialsException,
     TokenRevokedException,
 )
-
+from src.modules.user import (
+    User,
+    UserAlreadyExistsException,
+    UserInactiveException,
+    UserNotFoundException,
+    UserRepository,
+)
+from src.modules.user.events import UserNotFound
+from src.security import (
+    SECURITY_PASSWORD_HASH,
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    hash_password,
+    verify_password,
+)
 from src.settings import settings
-from src.modules.user import User, UserRepository, UserAlreadyExistsException, UserInactiveException
-from src.modules.audit import save_failed_event, save_success_event, LogAction, LogSeverity
+from src.share import AuditContext, event_bus
 
-
-from .schemas import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
+from .events import (
+    AuthAction,
+    AuthAllSessionsRevoked,
+    AuthEmailAlreadyRegistered,
+    AuthEmailNotFound,
+    AuthInactiveUserRejected,
+    AuthInvalidPassword,
+    AuthLoggedIn,
+    AuthLoggedOut,
+    AuthRefreshSessionExpired,
+    AuthRefreshSessionNotFound,
+    AuthRegistrationFailed,
+    AuthTokenPairIssued,
+    AuthTokenReplayDetected,
+    AuthTokenRotated,
+    AuthUserRegistered,
+)
 from .model import RefreshSession
 from .repo import RefreshSessionRepository
+from .schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse
 
 
 async def _issue_token_pair(
@@ -50,7 +72,7 @@ async def _issue_token_pair(
     refresh_token, jti = create_refresh_token(user_id=user_id)
 
     # Step 3: Persist refresh session to database
-    refresh_repo = RefreshSessionRepository(session=session)  # type: ignore
+    refresh_repo = RefreshSessionRepository(session=session)
     refresh_session = RefreshSession(
         user_id=user_id,
         refresh_token_jti=jti,
@@ -61,11 +83,12 @@ async def _issue_token_pair(
     await refresh_repo.create(instance=refresh_session)
     await session.flush()
 
-    await save_success_event(
-        message="Access & refresh token pair generated successfully.",
-        event_type=LogAction.CUSTOM,
-        user_id=str(user_id),
-        ctx=ctx,
+    await event_bus.publish(
+        event=AuthTokenPairIssued(
+            audit_ctx=ctx,
+            user_id=user_id,
+        ),
+        session=session,
     )
 
     return TokenResponse(
@@ -98,18 +121,18 @@ async def register_user(
     Raises:
         UserAlreadyExistsException: If the email is already registered.
     """
-    user_repo = UserRepository(session=session)  # type: ignore
+    user_repo = UserRepository(session=session)
 
     # Step 1: Check email uniqueness
     is_user_exist, user = await user_repo.is_exist_by_email(email=schema.email, return_orm=True)
     if is_user_exist and user is not None:
-        await save_failed_event(
-            message=f"User creation failed: email [{user.email}] already exists.",
-            event_type=LogAction.USER_REGISTERED,
-            severity=LogSeverity.ERROR,
-            user_id=str(user.id),
-            ctx=audit_ctx,
-            extra_data={"email": schema.email, "name": schema.name},
+        await event_bus.publish(
+            event=AuthEmailAlreadyRegistered(
+                audit_ctx=audit_ctx,
+                user_id=user.id,
+                email=user.email,
+                name=schema.name,
+            )
         )
         raise UserAlreadyExistsException(field='email', value=schema.email)
 
@@ -128,23 +151,23 @@ async def register_user(
         user = await user_repo.create(instance=instance)
         await session.flush()
     except IntegrityError as ie:
-        await save_failed_event(
-            message="User creation failed due to duplicate entry or constraint error.",
-            event_type=LogAction.USER_REGISTERED,
-            severity=LogSeverity.CRITICAL,
-            user_id=None,
-            ctx=audit_ctx,
-            extra_data={"error": str(ie), "email": schema.email},
+        await event_bus.publish(
+            event=AuthRegistrationFailed(
+                audit_ctx=audit_ctx,
+                email=schema.email,
+                error=str(ie),
+            )
         )
         raise UserAlreadyExistsException(field='email', value=schema.email)
 
-    await save_success_event(
-        message=f"User with ID [{user.id}] registered successfully.",
+    await event_bus.publish(
+        event=AuthUserRegistered(
+            audit_ctx=audit_ctx,
+            user_id=user.id,
+            email=user.email,
+            name=user.name,
+        ),
         session=session,
-        event_type=LogAction.USER_REGISTERED,
-        user_id=str(user.id),
-        ctx=audit_ctx,
-        extra_data={"email": user.email, "name": user.name},
     )
 
     return user
@@ -175,20 +198,18 @@ async def login_user(
         InvalidCredentialsException: If the email or password is wrong.
         UserInactiveException: If the user account is deactivated.
     """
-    user_repo = UserRepository(session=session)  # type: ignore
+    user_repo = UserRepository(session=session)
 
     # Step 1: Fetch user by email
     user = await user_repo.get_by_email(schema.email)
     if user is None:
         verify_password(schema.password, SECURITY_PASSWORD_HASH)
 
-        await save_failed_event(
-            message=f"User login failed: email [{schema.email}] not found.",
-            event_type=LogAction.AUTH_LOGIN_FAILED,
-            severity=LogSeverity.ERROR,
-            user_id=None,
-            ctx=audit_ctx,
-            extra_data={"reason": "EMAIL_NOT_FOUND", "email": schema.email},
+        await event_bus.publish(
+            event=AuthEmailNotFound(
+                audit_ctx=audit_ctx,
+                email=schema.email,
+            )
         )
         raise InvalidCredentialsException()
 
@@ -198,33 +219,33 @@ async def login_user(
         hashed_password=user.hashed_password,
     )
     if not is_hashed_match:
-        await save_failed_event(
-            message=f"User login failed: invalid password for [{schema.email}].",
-            event_type=LogAction.AUTH_LOGIN_FAILED,
-            severity=LogSeverity.ERROR,
-            user_id=str(user.id),
-            ctx=audit_ctx,
-            extra_data={"reason": "INVALID_PASSWORD", "email": schema.email},
+        await event_bus.publish(
+            event=AuthInvalidPassword(
+                audit_ctx=audit_ctx,
+                user_id=user.id,
+                email=user.email,
+            )
         )
         raise InvalidCredentialsException()
 
     # Step 3: Verify the account is active
     if not user.is_active:
-        await save_failed_event(
-            message=f"User login failed: account for [{user.email}] is deactivated.",
-            event_type=LogAction.AUTH_LOGIN_FAILED,
-            severity=LogSeverity.CRITICAL,
-            user_id=str(user.id),
-            ctx=audit_ctx,
-            extra_data={"reason": "ACCOUNT_DEACTIVATED", "user_id": user.id},
+        await event_bus.publish(
+            event=AuthInactiveUserRejected(
+                audit_ctx=audit_ctx,
+                user_id=user.id,
+                email=user.email,
+                action=AuthAction.LOGIN,
+            )
         )
         raise UserInactiveException(identifier=str(user.id))
 
-    await save_success_event(
-        message=f"User with ID [{user.id}] authenticated successfully.",
-        event_type=LogAction.AUTH_LOGIN_SUCCESS,
-        user_id=str(user.id),
-        ctx=audit_ctx,
+    await event_bus.publish(
+        event=AuthLoggedIn(
+            audit_ctx=audit_ctx,
+            user_id=user.id,
+        ),
+        session=session,
     )
 
     # Step 4: Issue dual token pair
@@ -254,17 +275,16 @@ async def logout(
     payload = decode_refresh_token(token=refresh_token_str)
     jti = payload.jti
 
-    refresh_repo = RefreshSessionRepository(session=session)  # type: ignore
+    refresh_repo = RefreshSessionRepository(session=session)
+    await refresh_repo.revoke_by_jti(jti=jti)
 
-    await save_success_event(
-        message=f"User with ID [{payload.sub}] logged out successfully.",
+    await event_bus.publish(
+        event=AuthLoggedOut(
+            audit_ctx=audit_ctx,
+            user_id=int(payload.sub),
+        ),
         session=session,
-        event_type=LogAction.AUTH_LOGOUT,
-        user_id=str(payload.sub),
-        ctx=audit_ctx,
     )
-
-    await refresh_repo.revoke_by_jti(jti=jti)  # type: ignore
 
 
 async def logout_all(
@@ -279,17 +299,16 @@ async def logout_all(
         session: The active database session.
         audit_ctx: Optional audit context.
     """
-    refresh_repo = RefreshSessionRepository(session=session)  # type: ignore
-
-    await save_success_event(
-        message=f"Revoked all sessions for user ID [{user_id}] successfully.",
-        session=session,
-        event_type=LogAction.AUTH_TOKEN_REVOKED,
-        user_id=str(user_id),
-        ctx=audit_ctx,
-    )
-
+    refresh_repo = RefreshSessionRepository(session=session)
     await refresh_repo.revoke_all_for_user(user_id=user_id)
+
+    await event_bus.publish(
+        event=AuthAllSessionsRevoked(
+            audit_ctx=audit_ctx,
+            user_id=user_id,
+        ),
+        session=session,
+    )
 
 
 async def refresh_token(
@@ -317,25 +336,48 @@ async def refresh_token(
     Raises:
         InvalidCredentialsException: If the token is malformed or expired.
         TokenRevokedException: If the session is revoked or not found.
+        UserNotFoundException: If the subject user does not exist.
+        UserInactiveException: If the subject user is deactivated.
     """
     # Step 1: Decode the refresh token
     payload = decode_refresh_token(token=schema.refresh_token)
     user_id = int(payload.sub)
     jti = payload.jti
 
-    # Step 2: Look up the session
-    refresh_repo = RefreshSessionRepository(session=session)  # type: ignore
-    existing_session = await refresh_repo.get_by_jti(jti=jti)  # type: ignore
+    # Step 2: Look up the session and user
+    user_repo = UserRepository(session=session)
+    refresh_repo = RefreshSessionRepository(session=session)
+    existing_session = await refresh_repo.get_by_jti(jti=jti)
+
+    # Step 2.5: Validate user is active
+    user = await user_repo.get_by_id(id=user_id)
+    if not user:
+        await event_bus.publish(
+            event=UserNotFound(
+                audit_ctx=audit_ctx,
+                user_id=user_id,
+            )
+        )
+        raise UserNotFoundException(identifier=str(user_id))
+
+    if not user.is_active:
+        await event_bus.publish(
+            event=AuthInactiveUserRejected(
+                audit_ctx=audit_ctx,
+                user_id=user_id,
+                email=user.email,
+                action=AuthAction.REFRESH,
+            )
+        )
+        raise UserInactiveException(identifier=str(user_id))
 
     # Step 3: Validate the session
     if existing_session is None:
-        await save_failed_event(
-            message="Refresh token session not found.",
-            event_type=LogAction.AUTH_TOKEN_REVOKED,
-            severity=LogSeverity.ERROR,
-            user_id=str(payload.sub),
-            ctx=audit_ctx,
-            extra_data={"reason": "SESSION_NOT_FOUND"},
+        await event_bus.publish(
+            event=AuthRefreshSessionNotFound(
+                audit_ctx=audit_ctx,
+                user_id=user_id,
+            )
         )
         raise TokenRevokedException()
 
@@ -344,16 +386,12 @@ async def refresh_token(
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 
     if expires_at < datetime.now(timezone.utc):
-        await save_failed_event(
-            message=f"Refresh token session [{existing_session.id}] expired.",
-            event_type=LogAction.AUTH_TOKEN_REVOKED,
-            severity=LogSeverity.ERROR,
-            user_id=str(payload.sub),
-            ctx=audit_ctx,
-            extra_data={
-                "session_id": existing_session.id,
-                "reason": "SESSION_EXPIRED",
-            },
+        await event_bus.publish(
+            event=AuthRefreshSessionExpired(
+                audit_ctx=audit_ctx,
+                user_id=user_id,
+                session_id=existing_session.id,
+            )
         )
         raise TokenRevokedException()
 
@@ -362,25 +400,21 @@ async def refresh_token(
     if not revoked:
         # Session was already revoked concurrently or reused — potential token theft
         await refresh_repo.revoke_all_for_user(user_id=user_id)
-        await save_failed_event(
-            message=f"Revoked refresh token re-use detected for user [{user_id}] (possible token theft).",
-            event_type=LogAction.AUTH_TOKEN_REVOKED,
-            severity=LogSeverity.CRITICAL,
-            user_id=str(payload.sub),
-            ctx=audit_ctx,
-            extra_data={
-                "session_id": existing_session.id,
-                "reason": "TOKEN_REPLAY_ATTACK",
-            },
+        await event_bus.publish(
+            event=AuthTokenReplayDetected(
+                audit_ctx=audit_ctx,
+                user_id=user_id,
+                session_id=existing_session.id,
+            )
         )
         raise TokenRevokedException()
 
-    await save_success_event(
-        message="Token pair refreshed and rotated successfully.",
+    await event_bus.publish(
+        event=AuthTokenRotated(
+            audit_ctx=audit_ctx,
+            user_id=user_id,
+        ),
         session=session,
-        event_type=LogAction.AUTH_TOKEN_ROTATED,
-        user_id=str(user_id),
-        ctx=audit_ctx,
     )
 
     # Step 5: Issue a fresh pair

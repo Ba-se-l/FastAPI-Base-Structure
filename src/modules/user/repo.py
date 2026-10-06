@@ -14,18 +14,28 @@ class UserRepository(BaseRepository[User]):
 
 
     @overload
-    async def is_exist_by_email(self, email: str, return_orm: Literal[False] = False) -> bool: ...
+    async def is_exist_by_email(
+        self,
+        email: str,
+        return_orm: Literal[False] = False
+    ) -> bool: ...
+    
     @overload
-    async def is_exist_by_email(self, email: str, return_orm: Literal[True]) -> tuple[bool, User | None]: ...
+    async def is_exist_by_email(
+        self,
+        email: str,
+        return_orm: Literal[True]
+    ) -> tuple[bool, User | None]: ...
 
-    async def is_exist_by_email(self, email: str, return_orm: bool = False) -> bool | tuple[bool, User | None]:
+    async def is_exist_by_email(
+        self,
+        email: str,
+        return_orm: bool = False
+    ) -> bool | tuple[bool, User | None]:
         user = await self.get_by_email(email)
-
-        if return_orm:
-            return (user is not None, user)
-
-        return user is not None
+        return user is not None, user if return_orm else user is not None
 
 
-
-
+    async def is_active_by_id(self, id: int) -> bool:
+        user = await self.get_by_id(id=id)
+        return user.is_active if user is not None else False

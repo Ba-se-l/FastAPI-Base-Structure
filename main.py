@@ -16,6 +16,8 @@ from src.exc import AppException
 from src.modules import api_router
 from src.settings import settings
 from src.share import ErrorDetail, ErrorResponse, _HTTP_ERROR_CODE_MAP
+from src.share.event_bus import event_bus
+from src.modules.audit.listeners import register_audit_listeners
 
 # Configure structured logging
 logging.basicConfig(
@@ -23,6 +25,11 @@ logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
 )
 logger = logging.getLogger(__name__)
+
+
+
+if settings.audit_enabled:
+    register_audit_listeners(event_bus)
 
 
 @asynccontextmanager

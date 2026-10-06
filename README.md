@@ -297,7 +297,7 @@ class Product(BaseModel, DateTimeMixin):
 
   class ProductRepository(BaseRepository[Product]):
       def __init__(self, session):
-          super().__init__(class_=Product, session=session)
+          super().__init__(model=Product, session=session)
   ```
 
 ### Step 4: Implement Service & Router

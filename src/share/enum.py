@@ -19,3 +19,13 @@ class Roles(StrEnum):
 
     USER = 'user'
     """Standard authenticated user."""
+
+
+class UserAction(StrEnum):
+    """Finite set of user-targeted operations subject to authorization."""
+
+    VIEW = 'view'
+    MODIFY = 'modify'
+    CHANGE_ROLE = 'change_role'
+    LOGIN = 'login'
+    REFRESH = 'refresh'
