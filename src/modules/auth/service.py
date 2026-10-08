@@ -22,6 +22,7 @@ from src.security import (
     decode_refresh_token,
     hash_password,
     verify_password,
+    verify_and_update
 )
 from src.settings import settings
 from src.share import AuditContext, event_bus
@@ -42,14 +43,15 @@ from .events import (
     AuthTokenReplayDetected,
     AuthTokenRotated,
     AuthUserRegistered,
+    AuthPasswordChanged
 )
 from .model import RefreshSession
 from .repo import RefreshSessionRepository
-from .schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse
+from .schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, ChangePasswordRequest
 
 
 async def _issue_token_pair(
-    user_id: int,
+    user: User,
     session: AsyncSession,
     device_info: str | None = None,
     ctx: AuditContext | None = None,
@@ -57,7 +59,7 @@ async def _issue_token_pair(
     """Creates an access + refresh token pair and persists the refresh session.
 
     Args:
-        user_id: The authenticated user's primary key.
+        user: The authenticated user.
         session: The active database session.
         device_info: Optional client device identifier.
         ctx: Optional audit context.
@@ -66,15 +68,15 @@ async def _issue_token_pair(
         A TokenResponse containing both tokens.
     """
     # Step 1: Generate access token
-    access_token = create_access_token(user_id=user_id)
+    access_token = create_access_token(user_id=user.id, security_version=user.security_version)
 
     # Step 2: Generate refresh token + JTI
-    refresh_token, jti = create_refresh_token(user_id=user_id)
+    refresh_token, jti = create_refresh_token(user_id=user.id)
 
     # Step 3: Persist refresh session to database
     refresh_repo = RefreshSessionRepository(session=session)
     refresh_session = RefreshSession(
-        user_id=user_id,
+        user_id=user.id,
         refresh_token_jti=jti,
         device_info=device_info,
         is_revoked=False,
@@ -86,7 +88,7 @@ async def _issue_token_pair(
     await event_bus.publish(
         event=AuthTokenPairIssued(
             audit_ctx=ctx,
-            user_id=user_id,
+            user_id=user.id,
         ),
         session=session,
     )
@@ -214,7 +216,7 @@ async def login_user(
         raise InvalidCredentialsException()
 
     # Step 2: Verify the password
-    is_hashed_match = verify_password(
+    is_hashed_match, new_hash = verify_and_update(
         password=schema.password,
         hashed_password=user.hashed_password,
     )
@@ -227,6 +229,11 @@ async def login_user(
             )
         )
         raise InvalidCredentialsException()
+
+    if new_hash is not None:
+        user.hashed_password = new_hash
+        await session.flush()
+
 
     # Step 3: Verify the account is active
     if not user.is_active:
@@ -250,7 +257,7 @@ async def login_user(
 
     # Step 4: Issue dual token pair
     return await _issue_token_pair(
-        user_id=user.id,
+        user=user,
         session=session,
         device_info=audit_ctx.user_agent if audit_ctx else None,
         ctx=audit_ctx,
@@ -419,8 +426,57 @@ async def refresh_token(
 
     # Step 5: Issue a fresh pair
     return await _issue_token_pair(
-        user_id=user_id,
+        user=user,
         session=session,
         device_info=audit_ctx.user_agent if audit_ctx else None,
         ctx=audit_ctx,
     )
+
+
+
+async def change_password(
+    user: User,
+    request: ChangePasswordRequest,
+    session: AsyncSession,
+    audit_ctx: AuditContext | None = None
+) -> bool:
+    """Updates user password, increments security version, and revokes all refresh sessions.
+
+    Args:
+        user: The authenticated user requesting the password change.
+        schema: Validated change-password request schema.
+        session: Active async database session.
+        audit_ctx: Optional request audit telemetry.
+
+    Returns:
+        True upon successful credential rotation.
+
+    Raises:
+        InvalidCredentialsException: If the current password verification fails.
+    """
+    session_repo = RefreshSessionRepository(session=session)
+
+    # Step 1: Verify old password
+    is_password_valid = verify_password(password=request.old_password, hashed_password=user.hashed_password)
+    if not is_password_valid:
+        raise InvalidCredentialsException()
+
+    # Step 2: Hash and set new password, increment security version
+    user.hashed_password = hash_password(request.new_password)
+    user.security_version += 1
+    await session.flush()
+
+    # Step 3: Revoke all refresh sessions
+    await session_repo.revoke_all_for_user(user_id=user.id)
+
+    # Step 4: Broadcast domain event for audit logging
+    await event_bus.publish(
+        event=AuthPasswordChanged(
+            audit_ctx=audit_ctx,
+            user_id=user.id,
+            email=user.email,
+        ),
+        session=session,
+    )
+
+    return True

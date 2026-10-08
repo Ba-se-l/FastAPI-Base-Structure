@@ -29,6 +29,7 @@ class User(Base, DateTimeMixin):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    security_version: Mapped[int] = mapped_column(Integer, default=1)
     role: Mapped[Roles] = mapped_column(
         SQLEnum(Roles, native_enum=False, length=20),
         default=Roles.USER,

@@ -5,6 +5,7 @@ from .security import (
     decode_refresh_token,
     hash_password,
     verify_password,
+    verify_and_update,
     SECURITY_PASSWORD_HASH
 )
 
@@ -16,5 +17,6 @@ __all__ = (
     'decode_refresh_token',
     'hash_password',
     'verify_password',
+    'verify_and_update',
     'SECURITY_PASSWORD_HASH',
 )

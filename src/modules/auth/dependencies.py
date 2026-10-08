@@ -8,7 +8,12 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.exc import AccessDeniedException, InactiveEntityException, InvalidCredentialsException
+from src.exc import (
+    AccessDeniedException,
+    InactiveEntityException,
+    InvalidCredentialsException,
+    TokenStaleException,
+)
 from src.security import decode_access_token
 from src.settings import settings
 from src.share import Roles
@@ -51,6 +56,10 @@ async def get_current_user(
 
     if user is None:
         raise InvalidCredentialsException()
+
+
+    if payload.security_version != user.security_version:
+        raise TokenStaleException()
 
     if not user.is_active:
         raise InactiveEntityException(entity='User', identifier=str(user.id))

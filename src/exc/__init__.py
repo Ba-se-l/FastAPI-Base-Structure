@@ -5,7 +5,8 @@ from .base import (
     AccessDeniedException,
     InvalidCredentialsException,
     InactiveEntityException,
-    TokenRevokedException
+    TokenRevokedException,
+    TokenStaleException
 )
 
 __all__ = (
@@ -16,4 +17,5 @@ __all__ = (
     'InvalidCredentialsException',
     'InactiveEntityException',
     'TokenRevokedException',
+    'TokenStaleException',
 )

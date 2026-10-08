@@ -2,9 +2,10 @@ from typing_extensions import TypedDict
 from typing import Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pydantic import BaseModel as Base
+from pydantic import BaseModel as Base, field_validator
 from .enum import TokenType
 
+from ..exc import InvalidCredentialsException
 
 _HTTP_ERROR_CODE_MAP: dict[int, str] = {
     400: "BAD_REQUEST",
@@ -29,8 +30,8 @@ class TokenPayload(Base):
     type: TokenType
     jti: str | None = None
     iat: datetime
+    security_version: int 
     exp: datetime
-
 
 class TokenResponse(Base):
     access_token: str

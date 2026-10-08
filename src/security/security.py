@@ -9,9 +9,9 @@ from ..share.enum import TokenType
 from ..share.schemas import TokenPayload
 from ..settings import settings
 
-ctx = PasswordHash.recommended()
+ph = PasswordHash.recommended()
 
-SECURITY_PASSWORD_HASH: str = ctx.hash("anti-timing-dummy-secret-fixed-entropy")
+SECURITY_PASSWORD_HASH: str = ph.hash("anti-timing-dummy-secret-fixed-entropy")
 """Pre-computed dummy argon2 hash constant used to equalize response latency during invalid login attempts."""
 
 
@@ -24,7 +24,7 @@ def hash_password(password: str) -> str:
     Returns:
         The encoded Argon2 password hash string.
     """
-    return ctx.hash(password=password)
+    return ph.hash(password=password)
 
 
 def verify_password(password: str, hashed_password: str) -> bool:
@@ -37,14 +37,31 @@ def verify_password(password: str, hashed_password: str) -> bool:
     Returns:
         True if the password matches the hash, False otherwise.
     """
-    return ctx.verify(password=password, hash=hashed_password)
+    return ph.verify(password=password, hash=hashed_password)
+
+def verify_and_update(password: str, hashed_password: str) -> tuple[bool, str | None]:
+    """Verifies a plaintext password and checks if the hash needs upgrading.
+
+    Args:
+        password: The plaintext password string to verify.
+        hashed_password: The existing hash to verify and potentially upgrade.
+
+    Returns:
+        A tuple of (is_valid, updated_hash_or_none).
+    """
+    return ph.verify_and_update(password=password, hash=hashed_password)
 
 
-def create_access_token(user_id: int | uuid.UUID, expires_delta: timedelta | None = None) -> str:
+
+def create_access_token(
+    user_id: int,
+    security_version: int = 1,
+    expires_delta: timedelta | None = None
+) -> str:
     """Generates a signed JWT access token for authentication.
 
     Args:
-        user_id: The authenticated user's unique primary identifier.
+        user_id: The authenticated user.
         expires_delta: Optional custom duration before expiration. Defaults to settings value.
 
     Returns:
@@ -60,6 +77,7 @@ def create_access_token(user_id: int | uuid.UUID, expires_delta: timedelta | Non
         type=TokenType.ACCESS,
         jti=uuid.uuid4().hex,
         iat=now,
+        security_version=security_version,
         exp=now + expires_delta,
     )
 
@@ -70,11 +88,14 @@ def create_access_token(user_id: int | uuid.UUID, expires_delta: timedelta | Non
     )
 
 
-def create_refresh_token(user_id: int | uuid.UUID, jti: str | None = None) -> tuple[str, str]:
+def create_refresh_token(
+    user_id: int,
+    jti: str | None = None
+) -> tuple[str, str]:
     """Generates a signed JWT refresh token with an assigned unique JTI identifier.
 
     Args:
-        user_id: The authenticated user's unique primary identifier.
+        user: The authenticated user.
         jti: Optional pre-assigned JWT ID string. If None, a random UUID hex is generated.
 
     Returns:
@@ -91,6 +112,7 @@ def create_refresh_token(user_id: int | uuid.UUID, jti: str | None = None) -> tu
         type=TokenType.REFRESH,
         jti=jti,
         iat=now,
+        security_version=1,
         exp=now + expires_delta,
     )
 

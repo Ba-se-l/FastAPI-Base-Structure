@@ -172,3 +172,14 @@ class AuthAllSessionsRevoked(DomainEvent):
 
     user_id: int
     """Identifier of the user revoking all devices."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AuthPasswordChanged(DomainEvent):
+    """A user account password was successfully updated and sessions invalidated."""
+
+    user_id: int
+    """Identifier of the user who changed credentials."""
+
+    email: str
+    """Email address of the user."""

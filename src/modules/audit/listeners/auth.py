@@ -18,6 +18,7 @@ from src.modules.auth.events import (
     AuthTokenReplayDetected,
     AuthTokenRotated,
     AuthUserRegistered,
+    AuthPasswordChanged
 )
 
 from src.share.event_bus import AsyncEventBus
@@ -37,6 +38,7 @@ __all__ = (
     'on_auth_token_replay_detected',
     'on_auth_token_rotated',
     'on_auth_user_registered',
+    'on_auth_password_changed',
     'register_auth_listeners',
 )
 
@@ -327,6 +329,25 @@ async def on_auth_all_sessions_revoked(
     )
 
 
+async def on_auth_password_changed(
+    event: AuthPasswordChanged,
+    session: AsyncSession | None = None
+) -> None:
+    """Records a successful password change inside the caller's transaction.
+
+    Args:
+        event: The AuthPasswordChangeds fact.
+        session: Caller's active transaction for atomic persistence.    
+    """
+    await save_success_event(
+        message=f"User [ID: {event.user_id} | Email: {event.email}] changed password successfully.",
+        session=session,
+        event_type=LogAction.AUTH_PASSWORD_CHANGED,
+        user_id=str(event.user_id),
+        ctx=event.audit_ctx
+    )
+
+
 def register_auth_listeners(bus: AsyncEventBus) -> None:
     """Subscribes all authentication-related audit listeners to the event bus.
 
@@ -347,3 +368,4 @@ def register_auth_listeners(bus: AsyncEventBus) -> None:
     bus.subscribe(AuthTokenRotated, on_auth_token_rotated)
     bus.subscribe(AuthLoggedOut, on_auth_logged_out)
     bus.subscribe(AuthAllSessionsRevoked, on_auth_all_sessions_revoked)
+    bus.subscribe(AuthPasswordChanged, on_auth_password_changed)

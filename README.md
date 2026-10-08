@@ -134,8 +134,8 @@ fastapi-base-structure/
 ### 1. Authentication & JWT Lifecycle
 - **Dual Token Architecture:** Issues short-lived access tokens (30 minutes) and revocable long-lived refresh tokens (30 days).
 - **Cryptographic JTI Tracking:** Every refresh token carries a unique JWT ID (`jti`) persisted in the database (`refresh_sessions` table).
-- **Session Revocation:** Logout revokes the specific refresh session. Supports instant device sign-out.
-- **Enterprise Password Hashing:** Uses `bcrypt` with optional SHA-256 pre-hashing to eliminate the 72-byte password truncation limit.
+- **Enterprise Password Hashing:** Uses state-of-the-art `Argon2` via `pwdlib` with transparent, automatic hash upgrade migration (`verify_and_update`).
+- **Credential-State Binding:** Access tokens enforce `security_version` matching, instantly invalidating active sessions upon password changes.
 
 ### 2. Role-Based Access Control (RBAC)
 - **Typed Roles:** Strict `Roles(StrEnum)` containing `USER` and `ADMIN`.

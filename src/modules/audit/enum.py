@@ -38,6 +38,9 @@ class LogAction(StrEnum):
     AUTH_TOKEN_REVOKED = 'AUTH_TOKEN_REVOKED'
     """Token revocation triggered or replay attack detected."""
 
+    AUTH_PASSWORD_CHANGED = 'AUTH_PASSWORD_CHANGED'
+    """User credentials were updated and sessions invalidated."""
+
     USER_REGISTERED = 'USER_REGISTERED'
     """New user account was provisioned."""
 

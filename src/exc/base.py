@@ -136,3 +136,17 @@ class TokenRevokedException(AppException):
             error_code="TOKEN_REVOKED",
             status_code=401,
         )
+
+
+class TokenStaleException(AppException):
+    """Raised when an access token security version does not match the user's current version.
+
+    Produces HTTP ``401 Unauthorized``.
+    """
+    def __init__(self, message: str = "Session has been invalidated due to credential changes. Please log in again."):
+        """Initializes the token-stale exception."""
+        super().__init__(
+            message=message,
+            error_code="TOKEN_STALE",
+            status_code=401
+        )
