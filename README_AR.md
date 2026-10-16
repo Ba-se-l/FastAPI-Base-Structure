@@ -1,59 +1,260 @@
-# 🚀 البنية التحتية القياسية لتطبيقات FastAPI للمؤسسات (v1.0.0)
+<div align="center">
+  <h1>🚀 البنية التحتية القياسية لتطبيقات FastAPI للمؤسسات</h1>
+  <p>
+    <strong>قاعدة مشاريع خلفية فائقة الأداء، مؤمنة بالكامل بمحرك PyCasbin، ومعمارية موجهة بالنطاق (DDD-lite) ومبادئ انعدام الثقة (Zero-Trust).</strong>
+  </p>
 
-[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.141+-009688.svg)](https://fastapi.tiangolo.com)
-[![SQLAlchemy 2.0](https://img.shields.io/badge/SQLAlchemy-2.0+-red.svg)](https://www.sqlalchemy.org/)
-[![Alembic](https://img.shields.io/badge/Alembic-Async-orange.svg)](https://alembic.sqlalchemy.org/)
-[![Pydantic v2](https://img.shields.io/badge/Pydantic-V2-green.svg)](https://docs.pydantic.dev/)
-[![Code Style: PEP 8](https://img.shields.io/badge/code%20style-PEP%208-black.svg)](https://peps.python.org/pep-0008/)
+  <p>
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.13+-3776AB.svg?style=flat&logo=python&logoColor=white" alt="Python 3.13+"></a>
+    <a href="https://fastapi.tiangolo.com"><img src="https://img.shields.io/badge/FastAPI-0.141+-009688.svg?style=flat&logo=fastapi&logoColor=white" alt="FastAPI 0.141+"></a>
+    <a href="https://www.sqlalchemy.org/"><img src="https://img.shields.io/badge/SQLAlchemy-2.0_Async-D71F00.svg?style=flat&logo=sqlalchemy&logoColor=white" alt="SQLAlchemy 2.0 Async"></a>
+    <a href="https://casbin.org/"><img src="https://img.shields.io/badge/PyCasbin-RBAC_Engine-0052CC.svg?style=flat" alt="PyCasbin RBAC"></a>
+    <a href="https://docs.astral.sh/uv/"><img src="https://img.shields.io/badge/Toolchain-uv-DE5FE9.svg?style=flat" alt="uv Package Manager"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat" alt="MIT License"></a>
+    <img src="https://img.shields.io/badge/الاختبارات-40%2F40_ناجح-brightgreen.svg?style=flat" alt="40/40 Tests Passing">
+  </p>
 
-بنية أساسية للمشاريع الخلفية (Backend Foundation) متقدمة، فائقة الأداء، وعالية التماسك، مبنية باستخدام **FastAPI** و **SQLAlchemy 2.0 (Async)** و **Pydantic V2**. صُممت وفق مبادئ التصميم الموجه بالنطاق (DDD-lite)، ونمط المنسق والخبير (Orchestrator-Specialist Pattern)، ومعايير صارمة تضمن الأمان وقابلية التوسع للمؤسسات الكبرى.
+  <p>
+    <a href="#-المخطط-المعماري-للنظام">المعمارية</a> ·
+    <a href="#-الميزات-والقدرات-الرئيسية">الميزات الرئيسية</a> ·
+    <a href="#-دليل-البدء-السريع">البدء السريع</a> ·
+    <a href="#-مواصفات-واجهة-الـ-api">الـ API</a> ·
+    <a href="#-أداة-الإدارة-والتحكم-managepy">أداة الإدارة</a> ·
+    <a href="#-منظومة-الاختبارات-المؤتمتة">الاختبارات</a>
+  </p>
 
----
-
-## 📑 فهرس المحتويات
-
-- [🚀 البنية التحتية القياسية لتطبيقات FastAPI للمؤسسات (v1.0.0)](#-البنية-التحتية-القياسية-لتطبيقات-fastapi-للمؤسسات-v100)
-  - [📑 فهرس المحتويات](#-فهرس-المحتويات)
-  - [🏛 الفلسفة المعمارية](#-الفلسفة-المعمارية)
-  - [📂 هيكل المشروع والمجلدات](#-هيكل-المشروع-والمجلدات)
-  - [⚡ الأنظمة والوحدات الأساسية](#-الأنظمة-والوحدات-الأساسية)
-    - [1. التوثيق والمصادقة ودورة حياة الـ JWT](#1-التوثيق-والمصادقة-ودورة-حياة-الـ-jwt)
-    - [2. التحكم في الوصول المستند للأدوار (RBAC)](#2-التحكم-في-الوصول-المستند-للأدوار-rbac)
-    - [3. قاعدة البيانات وهجرات Alembic اللازامنة](#3-قاعدة-البيانات-وهجرات-alembic-اللازامنة)
-    - [4. نظام التدقيق الأمني والتتبع الشامل (Audit Logging \& Telemetry)](#4-نظام-التدقيق-الأمني-والتتبع-الشامل-audit-logging--telemetry)
-    - [5. قوالب وأغلفة الردود الموحدة (Unified Envelopes)](#5-قوالب-وأغلفة-الردود-الموحدة-unified-envelopes)
-  - [🚀 دليل البدء السريع (Quickstart)](#-دليل-البدء-السريع-quickstart)
-    - [المتطلبات المسبقة](#المتطلبات-المسبقة)
-    - [التثبيت والإعداد](#التثبيت-والإعداد)
-    - [تهيئة متغيرات البيئة](#تهيئة-متغيرات-البيئة)
-    - [تطبيق هجرات قاعدة البيانات](#تطبيق-هجرات-قاعدة-البيانات)
-    - [تشغيل الخادم](#تشغيل-الخادم)
-  - [🧪 منظومة الاختبارات المؤتمتة (Testing Suite)](#-منظومة-الاختبارات-المؤتمتة-testing-suite)
-  - [🛠 دليل المطور: كيفية إضافة نطاق جديد للمشروع](#-دليل-المطور-كيفية-إضافة-نطاق-جديد-للمشروع)
-    - [الخطوة 1: إنشاء مجلد النطاق](#الخطوة-1-إنشاء-مجلد-النطاق)
-    - [الخطوة 2: إنشاء نموذج قاعدة البيانات (`model.py`)](#الخطوة-2-إنشاء-نموذج-قاعدة-البيانات-modelpy)
-    - [الخطوة 3: إنشاء المستودع والمخططات (`repo.py` و `schemas.py`)](#الخطوة-3-إنشاء-المستودع-والمخططات-repopy-و-schemaspy)
-    - [الخطوة 4: كتابة الخدمة والراوتر (`service.py` و `router.py`)](#الخطوة-4-كتابة-الخدمة-والراوتر-servicepy-و-routerpy)
-    - [الخطوة 5: تسجيل الراوتر وإنشاء ملف الهجرة](#الخطوة-5-تسجيل-الراوتر-وإنشاء-ملف-الهجرة)
-  - [📄 الترخيص](#-الترخيص)
+  <p>
+    🌐 <strong><a href="README.md">English Documentation (README.md)</a></strong>
+  </p>
+</div>
 
 ---
 
-## 🏛 الفلسفة المعمارية
+## 🏛 المخطط المعماري للنظام
 
-1. **المعمارية المعيارية الموجهة بالنطاق (Domain Modular Architecture):**
-   يتم تقسيم منطق الأعمال إلى موديولات مستقلة بذاتها تحت `src/modules/` (`auth`, `user`, `audit`). كل موديول يحتوي داخلياً على نماذجه (Models)، مستودعاته (Repositories)، مخططاته (Schemas)، خدماته (Services)، ومساراته (Routers).
-2. **نمط المنسق والخبير (Orchestrator-Specialist Pattern):**
-   * **الراوترات (Routers):** مسؤولة حصرياً عن استقبال طلبات الـ HTTP والتحقق من التبعيات وتنسيق كود الاستجابة دون كتابة استعلامات SQL أو منطق أعمال بداخلها.
-   * **الخدمات (Services - Maestros):** تنسيق العمليات الحيوية وتطبيق قواعد الأعمال المعقدة.
-   * **المستودعات (Repositories - Specialists):** فئات CRUD عامة وغير متزامنة تتبع مبدأ المسؤولية الواحدة (SRP).
-3. **عقود بيانات Pydantic V2 أولاً:**
-   كل البيانات التي تعبر حدود النظام (HTTP أو قاعدة البيانات) يتم التحقق من صحتها وتدقيق أنواعها عبر نماذج Pydantic صارمة.
-4. **الأنظمة النوعية الحديثة (Python 3.10+):**
-   استخدام علامة الأنبوب `|` للأنواع، واستخدام `StrEnum` للحالات الثابتة، ومنع استخدام الأنواع الملغاة القديمة.
-5. **إمكانية الرصد وتتبع الأخطاء:**
-   حقن معرفات التتبع الفريدة (`X-Request-ID`) عبر جميع الطلبات وتوحيد غلاف الردود للأخطاء لسهولة المراقبة.
+يعتمد المشروع على نمط المعمارية المعيارية الموجهة بالنطاق (**DDD-lite**) مدمجاً مع عقد السلوك البرمجي للمنسق والمتخصص (**Orchestrator-Specialist Pattern**):
+
+```mermaid
+flowchart TD
+    Client(["🌐 العميل / متصفح الويب / التطبيق"]) -->|طلب HTTPS + توكن JWT| Main["⚡ تطبيق FastAPI الرئيسي (main.py)"]
+    
+    subgraph Perimeter ["البرمجيات الوسيطة والسياق الأمني"]
+        Main --> ReqId["معرف التتبع الموحد (X-Request-ID)"]
+        ReqId --> AuditCtx["مستخرج سياق التدقيق (IP, User-Agent, Trace)"]
+        AuditCtx --> DepFactory["حقن التبعيات التعريفي (Dependencies)"]
+    end
+    
+    subgraph Security ["محرك الأمان والتحقق من الأذونات"]
+        DepFactory --> JWTGuard["مدقق التوكن وفحص security_version"]
+        JWTGuard --> CasbinGuard["require_permission(المورد, العملية)"]
+        CasbinGuard <-->|فحص فوري في الذاكرة بالمايكروثانية| CasbinCache[("⚡ محرك PyCasbin في الذاكرة (AsyncEnforcer)")]
+        CasbinCache -.->|مزامنة وتحميل عند الإقلاع| DB_Rules[("جدول الصلاحيات casbin_rule")]
+    end
+    
+    subgraph Domain ["طبقة النطاقات المعيارية (DDD-lite)"]
+        CasbinGuard --> Router["الموجّه Router (المنسق Orchestrator)"]
+        Router --> Service["خدمة النطاق Service (المايسترو Maestro)"]
+        Service --> BaseRepo["المستودع BaseRepository (خبير الـ CRUD)"]
+    end
+
+    subgraph Infrastructure ["التخزين اللازامني ووسيط الأحداث"]
+        BaseRepo --> AsyncEngine[("محرك AsyncEngine (SQLAlchemy 2.0 / aiosqlite / asyncpg)")]
+        Service --> EventBus["وسيط الأحداث في الذاكرة (EventBus)"]
+        EventBus --> AuditHandler["معالج أحداث التدقيق الأمني"]
+        AuditHandler --> SinkDB[("مصب قاعدة البيانات (audit_logs)")]
+        AuditHandler --> SinkFile["مصب الملفات النصية (logs/audit.log NDJSON)"]
+    end
+
+    subgraph OOB ["الإدارة المباشرة خارج النطاق"]
+        CLI["أداة السطر manage.py"] -->|جلسة مباشرة مع المحرك| AsyncEngine
+        CLI -->|بذر / منح / ربط أدوار| CasbinCache
+    end
+```
+
+### الأمان التعريفي المباشر في الكود
+تتم حماية نقاط النهاية عبر دوال حقن تبعيات نقية ومقروءة دون تلويث منطق الأعمال بأكواد الأمان:
+
+```python
+@router.get(
+    "",
+    response_model=SuccessResponse[list[UserResponse]],
+    dependencies=[Depends(require_permission(resource=Resource.USERS, action=Action.READ))],
+)
+async def list_users(
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> SuccessResponse[list[UserResponse]]:
+    users = await UserService.get_all_users(session=session)
+    return SuccessResponse(data=users)
+```
+
+---
+
+## 💡 لماذا هذه البنية التحتية؟
+
+بناء خدمات خلفية جاهزة للإنتاج المؤسسي يتطلب حل تحديات بنيوية معقدة قبل كتابة سطر واحد من منطق العمل: **إبطال الجلسات النشطة عند تغيير كلمات المرور**، **الفصل التام للصلاحيات عن الأدوار الثابتة**، **تسجيل سجلات التدقيق الأمني بأداء عالٍ دون تسريب البيانات الحساسة**، **إدارة هجرات قواعد البيانات بشكل تزامني دقيق**، و**التهيئة الأولى للمسؤولين خارج النطاق**.
+
+يوفر هذا المستودع نموذجاً مؤسسياً مصمماً للقضاء على الديون المعمارية:
+* **فصل الصلاحيات الديناميكي:** الانتقال من فحص الأدوار البدائي المكتوب يدوياً في الكود (`if user.role == 'admin'`) إلى نظام أذونات ديناميكي دقيق يعتمد على الموارد والعمليات عبر **PyCasbin**.
+* **مبدأ انعدام الثقة وإبطال التوكنات الفوري:** منع الجلسات المخترقة من العمل عند تغيير بيانات الاعتماد بفضل عداد `security_version` الذري المرتبط ببيانات الـ JWT.
+* **فصل المسؤوليات بدقة:** التزام صارم بنمط المنسق والخبير (Orchestrator-Specialist)؛ فالراوترات خفيفة، وخدمات النطاق متماسكة، ومستودعات البيانات عامة وقابلة لإعادة الاستخدام.
+* **الاعتماد الكلي على المعالجة غير المتزامنة (Async First):** بناء النظام بالكامل على أحدث أدوات `async`/`await` عبر شبكة الاتصال، محرك قاعدة البيانات، ومحرك فحص الصلاحيات لضمان أقصى كفاءة للموارد.
+
+---
+
+## ⚡ الميزات والقدرات الرئيسية
+
+- 🛡️ **نظام أذونات دقيق ومبني على انعدام الثقة (PyCasbin):** تقييم لحظي للصلاحيات في الذاكرة دون استهلاك استعلامات لقاعدة البيانات أثناء معالجة الطلب. يدعم توريث الأدوار، الصلاحيات الشاملة (`*`)، والتخصيص المباشر للمستخدمين الفرديين.
+- 🔐 **دورة حياة ثنائية للتوكنات وإبطال فوري للجلسات:** إصدار توكن وصول قصير الأجل (30 دقيقة) وتوكن تحديث قابل للإلغاء (30 يوماً). تتبع التوكنات عبر معرّف مشفر فريد (`jti`) في جدول `refresh_sessions`، مع تشفير حديث لكلمات المرور عبر Argon2id. إبطال شامل وفوري لكافة الجلسات بمجرد تغيير كلمة المرور عبر `security_version`.
+- ⚡ **تخزين غير متزامن أصيل (SQLAlchemy 2.0 Async):** عمليات إدخال وإخراج لازامنة عبر `AsyncEngine` ومجمع اتصالات `async_sessionmaker`. يوفر `BaseRepository[Model]` عمليات CRUD قياسية مع دعم كامل ومزدوج لـ SQLite (`aiosqlite`) و PostgreSQL (`asyncpg`).
+- 📜 **إدارة المخطط عبر الهجرات الإصدارية فقط (Alembic):** اعتماد معايير تسمية صارمة وموحدة للقيود (`ix_`, `uq_`, `ck_`, `fk_`, `pk_`) لمنع أخطاء التوليد التلقائي. منع إنشاء الجداول برمجياً في الإنتاج وحصرها في ملفات هجرات قابلة للمراجعة والفحص الآلي.
+- 🕵️ **تدقيق أمني متعدد المصاب ووسيط أحداث (EventBus):** تتبع أمني مفصول عبر وسيط أحداث داخلي في الذاكرة. بث لحظي لسجلات التدقيق نحو قاعدة البيانات وملفات الأقراص بتنسيق NDJSON القياسي. يتضمن تتبع عنوان العميل الحقيقي (`X-Forwarded-For`)، نوع المتصفح، الفروقات قبل وبعد التعديل (`diffs`)، وحجب قاطع لكلمات المرور والبيانات الحساسة.
+- 📦 **قوالب استجابة موحدة (Unified Pydantic Envelopes):** توحيد أغلفة الردود للكائنات الفردية (`SuccessResponse`)، القوائم المجزأة (`PaginatedResponse`)، وأغلفة الأخطاء الموحدة المحقونة بمعرّف التتبع الفريد (`X-Request-ID`).
+- 🧰 **أداة إدارة وتحكم خارج النطاق (`manage.py` CLI):** أداة سطر أوامر معزولة لتهيئة الصلاحيات الافتراضية، إنشاء المشرفين، وترقية وتعيين الأدوار دون الحاجة لفتح واجهات API عامة خطيرة.
+
+---
+
+## 🛠 حزمة التقنيات المستخدمة
+
+| الطبقة التقنية | المكون | الإصدار / المعيار | الهدف المعماري |
+| :--- | :--- | :--- | :--- |
+| **البيئة ومدير الحزم** | [Python](https://www.python.org/) / [uv](https://docs.astral.sh/uv/) | `Python 3.13+` / `uv >= 0.5` | بيئة تشغيل حديثة وإدارة فائقة السرعة للحزم والبيئات الافتراضية |
+| **إطار عمل الويب** | [FastAPI](https://fastapi.tiangolo.com/) | `>= 0.141.1` | توجيه الـ ASGI، حقن التبعيات، وتوليد وثائق OpenAPI تلقائياً |
+| **البيانات والتحقق** | [Pydantic V2](https://docs.pydantic.dev/) | `>= 2.13.4` | التحقق الصارم من صحة البيانات، وإدارة الإعدادات (`pydantic-settings`) |
+| **طبقة الـ ORM** | [SQLAlchemy 2.0](https://www.sqlalchemy.org/) | `>= 2.0.52 (Async)` | تخطيط العلاقات الكائني غير المتزامن وتجريد المستودعات |
+| **مشغلات قواعد البيانات** | `aiosqlite` / `asyncpg` | `>= 0.22` / `>= 0.31` | محركات الاتصال غير المتزامنة لـ SQLite محلياً و PostgreSQL إنتاجياً |
+| **هجرات المخطط** | [Alembic](https://alembic.sqlalchemy.org/) | `>= 1.19.1` | تتبع تطور قاعدة البيانات وضبط القيود تلقائياً |
+| **محرك الصلاحيات** | [PyCasbin](https://casbin.org/) | `>= 1.43.0` | محرك أذونات ديناميكي في الذاكرة مبني على معايير RBAC/ABAC |
+| **التشفير والأمان** | [pwdlib[argon2]](https://github.com/frankie567/pwdlib) / [PyJWT](https://pyjwt.readthedocs.io/) | `>= 0.3.1` / `>= 2.13.0` | تشفير وتدقيق كلمات المرور بـ Argon2id وترميز توكنات الـ JWT |
+| **منظومة الاختبار** | [pytest](https://pytest.org/) / [httpx](https://www.python-httpx.org/) | `>= 9.1` / `>= 0.28` | 40 اختبار مؤتمت يغطي كافة المسارات والحالات الحدية بنجاح 100% |
+
+---
+
+## 🚀 دليل البدء السريع
+
+شغّل الخادم محلياً في بيئة عملك في أقل من دقيقتين:
+
+### 1. المتطلبات المسبقة
+تأكد من تثبيت Python 3.13+ ومدير الحزم [`uv`](https://docs.astral.sh/uv/):
+```bash
+# تثبيت uv على أنظمة Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# تثبيت uv على أنظمة Linux / macOS
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### 2. استنساخ المستودع وتثبيت الاعتماديات
+```bash
+git clone <repository-url>
+cd fastapi-base-structure-dev
+uv sync
+```
+
+### 3. إعداد متغيرات البيئة
+أنشئ ملف البيئة المحلي من النموذج المشروح:
+```bash
+cp .env.example .env
+```
+*(الملف الافتراضي مهيأ تلقائياً للعمل الفوري مع قاعدة بيانات SQLite المحلية دون أي تعديل).*
+
+### 4. تطبيق الهجرات وبذر الصلاحيات الأساسية
+```bash
+# إنشاء وتحديث جداول قاعدة البيانات
+uv run alembic upgrade head
+
+# بذر سياسات الصلاحيات الافتراضية لمحرك Casbin
+uv run python manage.py seed-policies
+```
+
+### 5. إطلاق خادم التطوير
+```bash
+uv run uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+### 6. التحقق من سلامة النظام
+```bash
+curl http://127.0.0.1:8000/health
+# المخرجات المتوقعة: {"status":"healthy"}
+```
+
+---
+
+## 📖 مواصفات واجهة الـ API
+
+بمجرد إقلاع الخادم، تتوفر وثائق تفاعلية متكاملة عبر المتصفح:
+* **واجهة Swagger UI:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+* **واجهة ReDoc:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
+
+### نظرة عامة على نقاط النهاية الأساسية
+
+| الطريقة | المسار | الصلاحية المطلوبة | الوصف والوظيفة |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/register` | *عام (متاح للجميع)* | إنشاء حساب مستخدم عادي جديد |
+| `POST` | `/api/v1/auth/login` | *عام (متاح للجميع)* | المصادقة وإصدار توكن الوصول وتوكن التحديث |
+| `POST` | `/api/v1/auth/refresh` | *عام (عبر توكن التحديث)* | تدوير توكن التحديث وإصدار توكن وصول جديد |
+| `POST` | `/api/v1/auth/change-password` | مستخدم مصادق | تغيير كلمة المرور وإبطال كافة الجلسات النشطة فوراً |
+| `POST` | `/api/v1/auth/logout` | مستخدم مصادق | إلغاء وإبطال جلسة التحديث الحالية |
+| `GET` | `/api/v1/users/me` | مستخدم مصادق | استعراض بيانات الحساب الشخصي للمستخدم الحالي |
+| `GET` | `/api/v1/users` | `users:read` | جلب قائمة المستخدمين مع الترقيم والفرز المحدد |
+| `GET` | `/api/v1/users/{id}` | `users:read` | جلب بيانات مستخدم محدد بالمعرف |
+| `GET` | `/api/v1/audit/logs` | `audit:read` | الاستعلام عن سجلات التدقيق الأمني مع الفلترة |
+| `GET` | `/api/v1/audit/export` | `audit:export` | تصدير سجلات التدقيق بصيغة `JSON` أو `TXT` أو `MARKDOWN` |
+| `GET` | `/health` | *عام (متاح للجميع)* | فحص الحيوية وجاهزية الخادم للعمل |
+
+---
+
+## 🧰 أداة الإدارة والتحكم (`manage.py`)
+
+يتضمن المشروع أداة إدارة معزولة للتحكم في الصلاحيات وإنشاء الحسابات الإدارية مباشرة دون فتح واجهات ويب خطيرة.
+
+> 📘 **التوثيق الكامل:** راجع [manage_ar.md](manage_ar.md) للاطلاع على الدليل المرجعي الشامل بالعربية، أو [manage.md](manage.md) للنسخة الإنجليزية.
+
+```bash
+# بذر القواعد التأسيسية (admin, *, *) و (user, users, read)
+uv run python manage.py seed-policies
+
+# إنشاء حساب مسؤول أول من الصفر (إدخال مخفي لكلمة المرور)
+uv run python manage.py create-admin --email "admin@enterprise.io" --name "Root Admin"
+
+# ترقية مستخدم مسجل مسبقاً إلى مسؤول
+uv run python manage.py promote-admin --email "user@enterprise.io"
+
+# منح صلاحية لدور معين على مورد وعملية
+uv run python manage.py grant auditor audit read
+uv run python manage.py grant auditor audit export
+
+# ربط دور بمستخدم محدد بالمعرف الرقمي
+uv run python manage.py assign-role 5 auditor
+
+# استعراض كافة السياسات وتعيينات الأدوار النشطة
+uv run python manage.py list-policies
+
+# سحب صلاحية من دور (يتطلب --force لسحب صلاحية admin * *)
+uv run python manage.py revoke auditor audit export
+```
+
+---
+
+## ⚙️ مصفوفة الإعدادات ومتغيرات البيئة
+
+تُدار الإعدادات عبر `pydantic-settings` مع التحقق التلقائي من الأنواع، وقبول المتغيرات البيئية، وصمامات أمان حتمية للإنتاج:
+
+| المتغير | النوع | القيمة الافتراضية | إلزامي؟ | الوصف والغرض المعماري |
+| :--- | :--- | :--- | :--- | :--- |
+| `ENVIRONMENT` | `str` | `dev` | لا | نمط البيئة التشغيلية (`dev`, `test`, `staging`, `pro`). |
+| `DATABASE_URL` | `str` | `sqlite+aiosqlite:///./database.db` | **نعم** | عنوان الاتصال غير المتزامن بقاعدة البيانات (`sqlite` أو `postgresql`). |
+| `ACCESS_SECRET_KEY` | `str` | *نص افتراضي للتطوير* | **نعم** | المفتاح السري المشفر لتوقيع توكنات الوصول القصيرة. |
+| `REFRESH_SECRET_KEY` | `str` | *نص افتراضي للتطوير* | **نعم** | المفتاح السري المشفر لتوقيع توكنات التحديث طويلة الأجل. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `int` | `30` | لا | العمر الزمني لتوكن الوصول بالدقائق. |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `int` | `30` | لا | العمر الزمني لتوكن التحديث بالأيام. |
+| `LOG_TO_DB` | `bool` | `true` | لا | تفعيل أو تعطيل حفظ سجلات التدقيق في قاعدة البيانات. |
+| `LOG_TO_FILE` | `bool` | `true` | لا | تفعيل أو تعطيل كتابة سجلات التدقيق النصية إلى القرص بصيغة NDJSON. |
+| `AUDIT_LOG_FILE_PATH` | `str` | `logs/audit.log` | لا | مسار ملف حفظ سجلات التدقيق على نظام التشغيل. |
+| `CORS_ORIGINS` | `list[str]` | `["http://localhost:3000", ...]` | لا | نطاقات الـ CORS المصرح لها بالتواصل مع الخادم. النجمة `*` محظورة في الإنتاج. |
+
+> [!CAUTION]
+> عند ضبط `ENVIRONMENT=pro`، يرفض التطبيق الإقلاع فوراً إذا كانت المفاتيح السرية نصوصاً تجريبية أو إذا احتوت نطاقات CORS على الرمز الشامل `*`، وذلك لحماية البيئة الإنتاجية من الإعدادات الخاطئة.
 
 ---
 
@@ -61,260 +262,94 @@
 
 ```text
 fastapi-base-structure/
-├── main.py                     # نقطة دخول التطبيق، دورة الحياة (Lifespan)، البرمجيات الوسيطة، ومعالجات الأخطاء
+├── main.py                     # نقطة دخول التطبيق، دورة الحياة (Lifespan)، البرمجيات الوسيطة ومعالجات الأخطاء
+├── manage.py                   # أداة السطر المعمارية للإدارة، بذر الصلاحيات، وإنشاء المشرفين
+├── manage.md                   # الدليل المرجعي الشامل لأداة الإدارة (English)
+├── manage_ar.md                # الدليل المرجعي الشامل لأداة الإدارة (العربية)
 ├── pyproject.toml              # بيانات المشروع والاعتماديات (مُدار عبر uv)
 ├── alembic.ini                 # إعدادات هجرات قاعدة البيانات Alembic
 ├── .env.example                # نموذج متغيرات البيئة المشروح
-├── migrations/                 # بيئة هجرات Alembic غير المتزامنة
+├── migrations/                 # بيئة هجرات قاعدة البيانات غير المتزامنة
 │   ├── env.py                  # ملف تشغيل الهجرات المربوط بالإعدادات والنماذج
 │   ├── script.py.mako          # قالب التوليد التلقائي لملفات الهجرة
-│   ├── README.md               # دليل التعامل مع الهجرات (English)
-│   ├── README_AR.md            # دليل التعامل مع الهجرات (العربية)
+│   ├── README.md               # دليل الهجرات وتصفير القاعدة (English)
+│   ├── README_AR.md            # دليل الهجرات وتصفير القاعدة (العربية)
 │   └── versions/               # ملفات الهجرات المؤرخة والمفهرسة
 ├── src/
 │   ├── database/               # بنية قاعدة البيانات التحتية
-│   │   ├── __init__.py         # واجهة الاستيراد العامة
 │   │   ├── base.py             # DeclarativeBase مع معايير التسمية القياسية للقيود
-│   │   ├── base_repo.py        # المستودع العام BaseRepository[Model] (Async CRUD)
-│   │   ├── engine.py           # محرك AsyncEngine وفاحص الاتصال الأولي
-│   │   ├── mixin.py            # DateTimeMixin (حقول created_at و updated_at آلياً)
-│   │   └── session.py          # مزود جلسة قاعدة البيانات غير المتزامنة (get_session)
-│   ├── exc/                    # التسلسل الهرمي للاستثناءات
-│   │   ├── __init__.py         # تصدير الاستثناءات العامة
-│   │   └── base.py             # صنف AppException الأساسي
-│   ├── modules/                # النطاقات الوظيفية (Domain-Driven)
-│   │   ├── __init__.py         # الراوتر المركزي المجمّع لكل الموديولات
-│   │   ├── auth/               # نطاق المصادقة وإدارة الجلسات
-│   │   │   ├── dependencies.py # حقن التبعيات (get_current_user, require_role)
-│   │   │   ├── model.py        # نموذج RefreshSession لقاعدة البيانات
-│   │   │   ├── repo.py         # مستودع RefreshSessionRepository
-│   │   │   ├── router.py       # مسارات المصادقة (/login, /register, /refresh, /logout)
-│   │   │   ├── schemas.py      # مخططات Pydantic (LoginRequest, RegisterRequest)
-│   │   │   └── service.py      # منطق الأعمال للمصادقة وتوليد التوكن والتدقيق
-│   │   ├── user/               # نطاق إدارة المستخدمين
-│   │   │   ├── model.py        # نموذج المستخدم User ORM
-│   │   │   ├── repo.py         # مستودع UserRepository مع دعم الـ Overload
-│   │   │   ├── router.py       # مسارات المستخدمين (/me, /{id}, list, update)
-│   │   │   ├── schemas.py      # UserResponse, UserUpdate
-│   │   │   └── service.py      # خدمات المستخدمين مع الفحص الأمني المسبق
-│   │   └── audit/              # نطاق التدقيق الأمني وسجلات النظام
-│   │       ├── enum.py         # تصنيفات الشدة (LogSeverity) والعمليات (LogAction)
-│   │       ├── formatters.py   # منسقات السجلات إلى JSON (NDJSON)، نص، وMarkdown
-│   │       ├── model.py        # نموذج AuditLog في قاعدة البيانات مع فهارس مركبة
-│   │       ├── repo.py         # مستودع استعلام وتصفية السجلات AuditLogRepository
-│   │       ├── router.py       # مسارات الاستعلام والتصدير للمدراء (/logs, /export)
-│   │       ├── schemas.py      # مخططات LogEvent, LogResponse, LogQueryFilter
-│   │       └── service.py      # منسق الحفظ متعدد المصادر (قاعدة بيانات + أقراص)
-│   ├── security/               # خوارزميات التشفير وحماية البيانات
-│   │   ├── __init__.py         # واجهة التصدير
-│   │   └── security.py         # تشفير كلمات المرور (Argon2 عبر pwdlib) 
-│   ├── settings/               # إدارة الإعدادات ومتغيرات البيئة
-│   │   ├── __init__.py         # واجهة الإعدادات
-│   │   └── settings.py         # كلاس Settings مع فحص صارم لبيئة الإنتاج
-│   └── share/                  # العناصر المشتركة عبر النظام
-│       ├── __init__.py         # واجهة التصدير
-│       ├── enum.py             # الرتب (Roles) وأنواع التوكن (TokenType)
-│       ├── responses.py        # قوالب الردود (ErrorResponse, PaginatedResponse, MessageResponse)
-│       └── schemas.py          # كائن السياق AuditContext وتتبع الفروقات get_extra_dict_for_updates
-└── tests/                      # حزمة الاختبارات المؤتمتة الشاملة (17 اختبار)
-    ├── conftest.py             # تركيبات الاختبار مع SQLite في الذاكرة (Async)
-    ├── test_security.py        # اختبارات التشفير والـ JWT
-    ├── test_auth_flow.py       # دورة حياة التسجيل والدخول والخروج الكاملة
-    ├── test_user_rbac.py       # اختبار الصلاحيات والترقيم
-    ├── test_user_crud.py       # اختبارات التعديل والحذف وتدقيق البيانات
-    ├── test_validation_envelope.py # اختبار شكل الأخطاء الموحد 422
-    ├── test_pagination_edges.py # اختبار الحالات الحدية للترقيم
-    ├── test_audit_logging.py   # اختبارات التدقيق الأمني، التصدير، وحجب كلمات المرور
-    ├── test_audit_db_disabled.py # اختبار مرونة السجلات عند تعطيل الداتابيز
-    ├── test_health.py          # اختبار مسارات الفحص الصحي
-    ├── README.md               # دليل الاختبارات (English)
-    └── README_AR.md            # دليل الاختبارات (العربية)
+│   │   ├── base_repo.py        # المستودع العام BaseRepository[Model] (خبير الـ CRUD)
+│   │   ├── engine.py           # محرك AsyncEngine وإدارة دورة حياة مجمع الاتصال
+│   │   └── session.py          # مزود حقن جلسات قاعدة البيانات غير المتزامنة
+│   ├── exc/                    # التسلسل الهرمي للاستثناءات (AppException ورموز الأخطاء القياسية)
+│   ├── modules/                # موديولات النطاق المستقلة ذاتياً (DDD-lite)
+│   │   ├── auth/               # المصادقة، تدوير التوكنات، الجلسات، وتغيير كلمة المرور
+│   │   │   ├── dependencies.py # مصانع التبعيات: get_current_user و require_permission
+│   │   │   ├── model.py        # نموذج RefreshSession وتتبع الـ JTI
+│   │   │   ├── repo.py         # مستودع جلسات التحديث المتخصص
+│   │   │   ├── router.py       # مسارات الـ HTTP للمصادقة
+│   │   │   ├── schemas.py      # عقود التحقق من المدخلات والمخرجات
+│   │   │   └── service.py      # خدمة المصادقة (المايسترو)
+│   │   ├── user/               # إدارة المستخدمين والحسابات
+│   │   │   ├── model.py        # نموذج المستخدم وتتبع security_version
+│   │   │   ├── repo.py         # مستودع المستخدمين المتخصص
+│   │   │   ├── router.py       # مسارات إدارة المستخدمين
+│   │   │   └── service.py      # خدمة إدارة المستخدمين (المايسترو)
+│   │   └── audit/              # نظام التدقيق الأمني الشامل
+│   │       ├── model.py        # نموذج AuditLog وفهارسه المركبة
+│   │       ├── repo.py         # مستودع سجلات التدقيق المتخصص
+│   │       ├── router.py       # مسارات الاستعلام عن وتصدير السجلات
+│   │       ├── formatters.py   # منسقات التصدير (JSON, TXT, MARKDOWN)
+│   │       └── service.py      # خدمة التدقيق الأمني متعددة المصاب (قاعدة بيانات + ملف نصي)
+│   ├── security/               # محرك الأمان والتشفير والأذونات
+│   │   ├── authorization.py    # واجهة خدمة AuthorizationService الحاضنة لمحرك PyCasbin
+│   │   └── security.py         # تشفير كلمات المرور (Argon2id) وترميز JWT
+│   ├── settings/               # إدارة متغيرات البيئة عبر Pydantic Settings
+│   └── share/                  # العناصر المشتركة (Enums, Response Envelopes, EventBus)
+│       ├── enum.py             # تعدادات الأدوار، الموارد، والعمليات
+│       ├── event_bus.py        # وسيط أحداث النطاق غير المتزامن في الذاكرة
+│       └── responses.py        # أغلفة الاستجابة القياسية (SuccessResponse, PaginatedResponse, ErrorResponse)
+└── tests/                      # منظومة الاختبارات المؤتمتة (40 سيناريو فحص)
+    ├── conftest.py             # إعدادات وعملاء الاختبار غير المتزامنة مع SQLite في الذاكرة
+    ├── README.md               # توثيق الاختبارات (English)
+    └── README_AR.md            # توثيق الاختبارات (العربية)
 ```
 
 ---
 
-## ⚡ الأنظمة والوحدات الأساسية
+## 🧪 منظومة الاختبارات المؤتمتة
 
-### 1. التوثيق والمصادقة ودورة حياة الـ JWT
-- **نظام التوكن الثنائي (Dual Token Pair):** إصدار توكن وصول قصير الأجل (30 دقيقة) وتوكن تحديث طويل الأجل (30 يوماً).
-- **تتبع JTI التشفيري:** كل توكن تحديث يحمل معرّفاً فريداً (`jti`) مسجلاً في جدول `refresh_sessions`.
-- **تدوير التوكن وكشف الهجمات (Rotation & Replay Attack Defense):** عند استخدام توكن تم استبداله أو إلغاؤه سابقاً، يكتشف النظام فوراً هجوماً محتملاً لسرقة الجلسة (Token Theft) ويقوم فوراً بإبطال جميع جلسات المستخدم وتسجيل حدث حرج `AUTH_TOKEN_REVOKED` بشدة `CRITICAL`.
-- **تجزئة كلمات المرور الحديثة:** استخدام خوارزمية `Argon2` الأحدث عبر `pwdlib` مع دعم الترقية التلقائية الشفافة للهاش (`verify_and_update`).
-- **ربط حالة الأمان (Credential-State Binding):** فرض تطابق `security_version` داخل توكن الوصول لإبطال الجلسات المسروقة فورياً عند تغيير كلمة المرور.
-
----
-
-### 2. محرك الصلاحيات والتفويض المركزي (PyCasbin Authorization Engine)
-- **فصل الأدوار عن الصلاحيات (Policy-Based Decoupling):** الانتقال من التقييد الصلب بالدور إلى محرك سياسات مرن يخزن القواعد في جدول `casbin_rule`.
-- **أداء الذاكرة فائق السرعة (In-Memory Cache):** تحميل السياسات في الذاكرة العشوائية RAM عند إقلاع التطبيق وفحصها في أجزاء من الميكروثانية دون إجراء أي استعلام SQL في كل طلب.
-- **قاموس الصلاحيات الصارم:** تعريف الموارد `Resource` (`USERS`, `AUDIT`) والعمليات `Action` (`CREATE`, `READ`, `UPDATE`, `DELETE`, `EXPORT`, `ASSIGN_ROLE`).
-- **طبقة التوافق الذكية (Compatibility Projection):** دعم توافقي مزدوج: فحص الدور الرئيسي للمستخدم (`admin`, `user`) متبوعاً بفحص الصلاحيات المخصصة للمستخدم (`user:<id>`).
-- **فحص الصلاحيات بحقن التبعيات (`require_permission`):**
-  ```python
-  @router.get("", dependencies=[Depends(require_permission(resource=Resource.USERS, action=Action.READ))])
-  async def list_users(...):
-      ...
-  ```
-- **أداة الإدارة والتحكم الكاملة (`manage.py` CLI):**
-  ```bash
-  python manage.py list-policies
-  python manage.py grant auditor audit read
-  python manage.py assign-role 10 auditor
-  python manage.py create-admin --email admin@domain.com --name "Root Admin"
-  ```
-- **الحماية من استكشاف المستخدمين (User Enumeration Defense):** التحقق من الصلاحيات يتم **قبل** أي استعلام لقاعدة البيانات، مما يمنع المهاجم من التمييز بين المستخدم غير الموجود والمستخدم الممنوع من الوصول.
-
----
-
-### 3. قاعدة البيانات وهجرات Alembic اللازامنة
-- **SQLAlchemy 2.0 Async Native:** استخدام `AsyncEngine` و `async_sessionmaker`.
-- **تسمية القيود الموحدة:** تضمن إنشاء وتعديل الجداول تلقائياً عبر Alembic بدون أخطاء عبر SQLite و PostgreSQL.
-- **إدارة المخطط عبر الهجرات فقط:** منع التوليد العشوائي للجداول في الإنتاج وحصرها في ملفات الهجرات المحفوظة في المستودع.
-
----
-
-### 4. نظام التدقيق الأمني والتتبع الشامل (Audit Logging & Telemetry)
-- **حفظ متعدد المصادر (Multi-Sink):** كتابة السجل في نفس اللحظة لقاعدة البيانات والملفات النصية على القرص في مسار `logs/`.
-- **صيغة NDJSON الصارمة:** كتابة سطر JSON واحد لكل سجل، مما يسمح لأدوات المراقبة الحديثة مثل Vector و Filebeat و Loki بقراءتها فوراً بدون أي تأخير.
-- **كائن سياق التدقيق النقي (`AuditContext`):**
-  كلاس `@dataclass(frozen=True, slots=True)` فائق السرعة وخفيف على الذاكرة، يتم حقنه في الراوتر بسطر واحد عبر:
-  ```python
-  audit_ctx: AuditContext = Depends(get_audit_context)
-  ```
-  يقوم الكائن تلقائياً باستخراج:
-  * عنوان الـ IP الحقيقي (مع دعم كامل لخوادم البروكسي العكسي مثل Cloudflare و Nginx عبر `X-Forwarded-For`).
-  * ترويسة المتصفح والعميل (`User-Agent`).
-  * معرّف الطلب الموحد (`request_id`).
-- **حظر تسريب كلمات المرور الصريح (Zero Credential Leakage):**
-  استبعاد كلمات المرور الصريحة دائماً عند حفظ بيانات التسجيل (`extra_data={"email": user.email, "name": user.name}`) لمنع حفظ كلمات المرور في السجلات.
-- **تتبع فروقات التعديل (`get_extra_dict_for_updates`):**
-  التقاط الحالة القديمة للمستخدم قبل التحديث ومقارنتها بالقيم الجديدة لتوثيق: `{"name": {"old": "Ahmad", "new": "Ahmad Ali"}}`.
-- **تصدير السجلات بثلاث صيغ:** مسارات إدارية تتيح تنزيل سجلات التدقيق بصيغ `JSON` و `TXT` و `Markdown Table`.
-
----
-
-### 5. قوالب وأغلفة الردود الموحدة (Unified Envelopes)
-* **غلاف القوائم المرقّمة (Paginated Envelope):**
-  ```json
-  {
-    "success": true,
-    "data": [ ... ],
-    "pagination": {
-      "page": 1,
-      "page_size": 20,
-      "total": 100,
-      "pages": 5
-    }
-  }
-  ```
-* **غلاف التأكيدات الإجرائية (Message Response):**
-  ```json
-  {
-    "success": true,
-    "message": "Logged out successfully."
-  }
-  ```
-* **غلاف الأخطاء الموحد (Error Envelope):**
-  شكل ثابت لا يتغير لأي خطأ في النظام (400, 401, 403, 404, 422, 500):
-  ```json
-  {
-    "success": false,
-    "error": {
-      "code": "VALIDATION_ERROR",
-      "message": "Invalid request payload.",
-      "details": [ ... ]
-    },
-    "request_id": "9a4f6d8c0b2e4f..."
-  }
-  ```
-
----
-
-## 🚀 دليل البدء السريع (Quickstart)
-
-### المتطلبات المسبقة
-- **Python 3.13** أو أحدث.
-- أداة [**`uv`**](https://docs.astral.sh/uv/) (مدير الحزم السريع جداً لبايثون).
-
-### التثبيت والإعداد
-قم بنسخ المستودع وتثبيت الاعتماديات:
-```bash
-git clone <repository-url>
-cd fastapi-base-structure
-uv sync
-```
-
-### تهيئة متغيرات البيئة
-انسخ ملف الإعدادات النموذجي:
-```bash
-cp .env.example .env
-```
-أهم المتغيرات:
-| المتغير | القيمة الافتراضية | الوصف |
-|:---|:---|:---|
-| `ENVIRONMENT` | `dev` | بيئة التشغيل (`dev`, `test`, `staging`, `pro`) |
-| `DATABASE_URL` | `sqlite+aiosqlite:///./database.db` | رابط الاتصال بقاعدة البيانات غير المتزامنة |
-| `ACCESS_SECRET_KEY` | `...` | مفتاح تشفير توكن الوصول (JWT) |
-| `REFRESH_SECRET_KEY` | `...` | مفتاح تشفير توكن التحديث (JWT) |
-| `LOG_TO_DB` | `true` | تفعيل/تعطيل حفظ السجلات في قاعدة البيانات |
-| `LOG_TO_FILE` | `true` | تفعيل/تعطيل كتابة السجلات في ملفات القرص |
-
-### تطبيق هجرات قاعدة البيانات
-لتطبيق جميع الهجرات وإنشاء الجداول:
-```bash
-uv run alembic upgrade head
-```
-
-### تشغيل الخادم
-لتشغيل خادم التطوير مع التحديث التلقائي (Live Reload):
-```bash
-uv run uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
-يمكنك فتح التوثيق التفاعلي للـ API عبر:
-- **Swagger UI:** `http://127.0.0.1:8000/docs`
-- **ReDoc:** `http://127.0.0.1:8000/redoc`
-
----
-
-## 🧪 منظومة الاختبارات المؤتمتة (Testing Suite)
-
-يحتوي المشروع على حزمة اختبارات مؤتمتة بنسبة تغطية 100% لجميع المسارات والحالات الحرجة، وتعمل على قاعدة بيانات SQLite معزولة بالكامل في الذاكرة:
+يحافظ المشروع على **نسبة نجاح 100%** عبر 40 سيناريو فحص آلي تغطي كافة عقود الـ API، صمامات الأمان، والحالات الحدية بالاعتماد على قاعدة بيانات SQLite معزولة في الذاكرة:
 
 ```bash
-# تشغيل كامل الاختبارات
+# تشغيل كافة الاختبارات مع التفاصيل
 uv run pytest -v
+
+# تشغيل اختبارات نظام الصلاحيات ومحرك Casbin
+uv run pytest tests/test_phase2_authorization.py -v
+
+# تشغيل اختبارات تغيير كلمة المرور وإبطال الجلسات
+uv run pytest tests/test_phase1_security_hardening.py -v
+
+# تشغيل اختبارات التدقيق الأمني والمصاب المزدوجة
+uv run pytest tests/test_audit_logging.py -v
 ```
 
-المخرجات المتوقعة:
-```text
-tests\test_audit_db_disabled.py .
-tests\test_audit_logging.py ...
-tests\test_auth_flow.py .
-tests\test_health.py .
-tests\test_pagination_edges.py ..
-tests\test_security.py ....
-tests\test_user_crud.py .
-tests\test_user_rbac.py .
-tests\test_validation_envelope.py ...
-
-============================= 17 passed in 7.93s ==============================
-```
-
-للمزيد من التفاصيل حول سيناريوهات الاختبار، راجع:
-- [`tests/README_AR.md`](tests/README_AR.md)
+> 📘 **توثيق الاختبارات:** راجع [tests/README_AR.md](tests/README_AR.md) أو [tests/README.md](tests/README.md) للاطلاع على تفاصيل عقود الاستجابة وسيناريوهات الفحص المعتمدة.
 
 ---
 
 ## 🛠 دليل المطور: كيفية إضافة نطاق جديد للمشروع
 
-لإضافة نطاق جديد (مثال: المنتجات `products`) اتبع الخطوات الخمس التالية:
+<details>
+<summary><strong>اضغط هنا لفتح الدليل: 5 خطوات لإضافة نطاق جديد بالكامل (مثال: المنتجات Products)</strong></summary>
 
-### الخطوة 1: إنشاء مجلد النطاق
+### الخطوة 1: إنشاء مجلد النطاق الجديد
 ```bash
 mkdir src/modules/products
 ```
 
-### الخطوة 2: إنشاء نموذج قاعدة البيانات (`model.py`)
+### الخطوة 2: تعريف نموذج قاعدة البيانات (`src/modules/products/model.py`)
 ```python
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -328,32 +363,33 @@ class Product(BaseModel, DateTimeMixin):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
 ```
 
-### الخطوة 3: إنشاء المستودع والمخططات (`repo.py` و `schemas.py`)
-* ابنِ مخططات Pydantic للإدخال والإخراج (`ProductCreate`, `ProductResponse`).
-* ابنِ المستودع بالوراثة من المستودع العام:
-  ```python
-  from src.database import BaseRepository
-  from .model import Product
+### الخطوة 3: إنشاء المستودع المتخصص (`src/modules/products/repo.py`)
+```python
+from sqlalchemy.ext.asyncio import AsyncSession
+from src.database.base_repo import BaseRepository
+from .model import Product
 
-  class ProductRepository(BaseRepository[Product]):
-      def __init__(self, session):
-          super().__init__(class_=Product, session=session)
-  ```
+class ProductRepository(BaseRepository[Product]):
+    def __init__(self, session: AsyncSession):
+        super().__init__(model=Product, session=session)
+```
 
-### الخطوة 4: كتابة الخدمة والراوتر (`service.py` و `router.py`)
-* اربط استدعاءات التدقيق `save_success_event` أو `save_failed_event` عند العمليات الحساسة.
-* استقبل `audit_ctx: AuditContext = Depends(get_audit_context)` في الراوتر ومرره للخدمة.
+### الخطوة 4: كتابة الخدمة والراوتر
+* بناء منطق الأعمال في `service.py`.
+* بناء مسارات الـ HTTP في `router.py` وتأمينها برمجياً عبر `require_permission(Resource.PRODUCTS, Action.READ)`.
 
-### الخطوة 5: تسجيل الراوتر وإنشاء ملف الهجرة
-* أضف الراوتر الجديد في `src/modules/__init__.py`.
-* استورد النموذج في `migrations/env.py`.
-* نفذ أمر توليد الهجرة وتطبيقها:
+### الخطوة 5: تسجيل الراوتر وتوليد الهجرة
+* استيراد الراوتر في `src/modules/__init__.py`.
+* استيراد نموذج `Product` في `migrations/env.py`.
+* توليد وتطبيق الهجرة:
   ```bash
   uv run alembic revision --autogenerate -m "add_products_table"
   uv run alembic upgrade head
   ```
+</details>
 
 ---
 
-## 📄 الترخيص
-هذا المشروع مفتوح المصدر وموزع تحت رخصة [MIT License](LICENSE).
+## 📄 الترخيص والمساهمة
+
+هذا المشروع مفتوح المصدر وموزع تحت مظلة رخصة **[MIT License](LICENSE)**. نرحب بكافة المساهمات والمقترحات البرمجية التي تلتزم بدستور المعمارية البرمجية للمشروع.

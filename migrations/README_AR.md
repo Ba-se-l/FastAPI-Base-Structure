@@ -28,7 +28,10 @@
    - [المسار ب: إنشاء موديول ونموذج جدول جديد بالكامل](#المسار-ب-إنشاء-موديول-ونموذج-جدول-جديد-بالكامل)
    - [المسار ج: كتابة ترحيل بيانات مخصص (Data Migration)](#المسار-ج-كتابة-ترحيل-بيانات-مخصص-data-migration)
 6. [استكشاف الأخطاء الشائعة وحلولها](#6-استكشاف-الأخطاء-الشائعة-وحولها)
-
+7. [دليل تصفير وإخماد قاعدة البيانات تماماً (Database Reset & Data Purging)](#7-دليل-تصفير-وإخماد-قاعدة-البيانات-تماما-database-reset--data-purging)
+   - [الخيار الأول: التراجع المعماري الكامل وإعادة البناء عبر Alembic (الموصى به)](#الخيار-الأول-التراجع-المعماري-الكامل-وإعادة-البناء-عبر-alembic-الموصى-به)
+   - [الخيار الثاني: الحذف الفيزيائي الفوري لملف قاعدة البيانات (بيئة التطوير SQLite)](#الخيار-الثاني-الحذف-الفيزيائي-الفوري-لملف-قاعدة-البيانات-بيئة-التطوير-sqlite)
+   - [الخيار الثالث: تصفير وتفريغ البيانات دون هدم الجداول (DML Purging / Truncate)](#الخيار-الثالث-تصفير-وتفريغ-البيانات-دون-هدم-الجداول-dml-purging--truncate)
 ---
 
 ## 1. المعمارية والمبادئ الهندسية الأساسية
@@ -378,3 +381,102 @@ context.configure(
   ```python
   status: Mapped[str] = mapped_column(String(50), nullable=False, server_default="active")
   ```
+
+---
+
+## 7. دليل تصفير وإخماد قاعدة البيانات تماماً (Database Reset & Data Purging)
+
+في دورة حياة المشروع وبيئات التطوير والاختبار، يحتاج المطور أو مهندس العمليات لتفريغ البيانات أو إعادة تهيئة قاعدة البيانات من الصفر. تتوفر ثلاث استراتيجيات هندسية حسب الهدف والبيئة:
+
+---
+
+### الخيار الأول: التراجع المعماري الكامل وإعادة البناء عبر Alembic (الموصى به)
+
+هذا المسار يعتمد حصراً على محرك ترحيل الإصدارات للتراجع عن كافة الترحيلات إلى نقطة البداية الصفرية (`base`)، ثم إعادة تطبيقها من جديد:
+
+1. **إرجاع كافة الجداول وإلغاء المخططات التراكمية:**
+   ```bash
+   uv run alembic downgrade base
+   ```
+   > يقوم هذا الأمر بتنفيذ دوال `downgrade()` بالترتيب العكسي لجميع ملفات الترحيل، مما يسقط كافة الجداول بما فيها `users` و `casbin_rule` ويبقي فقط جدول `alembic_version` فارغاً.
+
+2. **إعادة بناء المخططات بالكامل إلى أحدث إصدار:**
+   ```bash
+   uv run alembic upgrade head
+   ```
+
+3. **(اختياري) بذر البيانات التأسيسية والصلاحيات:**
+   ```bash
+   uv run python manage.py seed-policies
+   ```
+
+---
+
+### الخيار الثاني: الحذف الفيزيائي الفوري لملف قاعدة البيانات (بيئة التطوير SQLite)
+
+في بيئات التطوير المحلية حيث يُستخدم SQLite كملف محلي (`database.db`)، يمكن إبادة القاعدة وإعادة إنشائها بثوانٍ:
+
+1. **حذف ملف قاعدة البيانات:**
+   * **PowerShell (Windows):**
+     ```powershell
+     Remove-Item -Force database.db -ErrorAction SilentlyContinue
+     ```
+   * **Bash (Linux / macOS):**
+     ```bash
+     rm -f database.db
+     ```
+
+2. **إعادة بناء الهيكل بالكامل من الصفر عبر Alembic:**
+   ```bash
+   uv run alembic upgrade head
+   ```
+
+3. **التحقق من صحة المخطط التزامني:**
+   ```bash
+   uv run alembic check
+   ```
+
+---
+
+### الخيار الثالث: تصفير وتفريغ البيانات دون هدم الجداول (DML Purging / Truncate)
+
+إذا كنت ترغب في الاحتفاظ بهيكل الجداول والمخطط (Schema) سليماً وتفريغ السجلات والصفوف فقط (مثلاً قبل تشغيل مجموعة اختبارات E2E):
+
+#### أ. عبر أوامر SQL المباشرة:
+في قواعد البيانات التي تدعم المفاتيح الأجنبية، يجب مراعاة تعطيل فحص القيود مؤقتاً لتجنب أخطاء `FOREIGN KEY constraint failed`:
+
+* **SQLite:**
+  ```sql
+  PRAGMA foreign_keys = OFF;
+  DELETE FROM casbin_rule;
+  DELETE FROM users;
+  -- تصفير عدادات الترقيم التلقائي
+  DELETE FROM sqlite_sequence WHERE name IN ('users', 'casbin_rule');
+  PRAGMA foreign_keys = ON;
+  VACUUM;
+  ```
+
+* **PostgreSQL:**
+  ```sql
+  TRUNCATE TABLE casbin_rule, users RESTART IDENTITY CASCADE;
+  ```
+
+#### ب. برمجياً عبر بايثون (سكربت سريع لتنظيف الجداول):
+يمكنك تنفيذ تنظيف برمجي موحد عبر محرك المشروع غير المتزامن:
+```python
+import asyncio
+from sqlalchemy import text
+from src.database.engine import async_engine
+
+async def purge_all_data() -> None:
+    async with async_engine.begin() as conn:
+        # تعطيل المفاتيح الأجنبية في SQLite
+        await conn.execute(text("PRAGMA foreign_keys = OFF;"))
+        await conn.execute(text("DELETE FROM casbin_rule;"))
+        await conn.execute(text("DELETE FROM users;"))
+        await conn.execute(text("PRAGMA foreign_keys = ON;"))
+    print("Database data purged successfully.")
+
+if __name__ == "__main__":
+    asyncio.run(purge_all_data())
+```

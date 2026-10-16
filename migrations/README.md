@@ -28,7 +28,10 @@ This directory contains the database schema migration scripts and environment co
    - [Workflow B: Creating a New Domain Model & Table](#workflow-b-creating-a-new-domain-model--table)
    - [Workflow C: Writing a Custom Data Migration](#workflow-c-writing-a-custom-data-migration)
 6. [Troubleshooting & Common Pitfalls](#6-troubleshooting--common-pitfalls)
-
+7. [Database Reset & Data Purging Guide](#7-database-reset--data-purging-guide)
+   - [Option 1: Complete Schema Teardown and Rebuild via Alembic (Recommended)](#option-1-complete-schema-teardown-and-rebuild-via-alembic-recommended)
+   - [Option 2: Physical Database File Removal (Local SQLite Dev Environments)](#option-2-physical-database-file-removal-local-sqlite-dev-environments)
+   - [Option 3: Data Purging Without Schema Destruction (DML Purge / Truncate)](#option-3-data-purging-without-schema-destruction-dml-purge--truncate)
 ---
 
 ## 1. Architecture & Design Principles
@@ -380,3 +383,101 @@ Sometimes you need to seed default roles or transform existing data rather than 
      ```python
      status: Mapped[str] = mapped_column(String(50), nullable=False, server_default="active")
      ```
+
+---
+
+## 7. Database Reset & Data Purging Guide
+
+During development, CI/CD cycles, or system resets, engineers frequently need to clear data or completely reinitialize the database schema from scratch. Three architectural patterns are available depending on your environment and objective:
+
+---
+
+### Option 1: Complete Schema Teardown and Rebuild via Alembic (Recommended)
+
+This approach strictly relies on Alembic's version tree to roll back all migrations to the initial clean state (`base`), and then reapplies them from zero:
+
+1. **Tear down all tables and revert migrations:**
+   ```bash
+   uv run alembic downgrade base
+   ```
+   > This executes the `downgrade()` functions across all migrations in reverse chronological order, dropping all application tables (`users`, `casbin_rule`) while keeping `alembic_version` synchronized.
+
+2. **Reapply all migrations to the latest revision:**
+   ```bash
+   uv run alembic upgrade head
+   ```
+
+3. **(Optional) Seed baseline roles and permissions:**
+   ```bash
+   uv run python manage.py seed-policies
+   ```
+
+---
+
+### Option 2: Physical Database File Removal (Local SQLite Dev Environments)
+
+For local development where SQLite is configured as a local file (`database.db`), you can rapidly destroy and recreate the database file:
+
+1. **Delete the database file:**
+   * **PowerShell (Windows):**
+     ```powershell
+     Remove-Item -Force database.db -ErrorAction SilentlyContinue
+     ```
+   * **Bash (Linux / macOS):**
+     ```bash
+     rm -f database.db
+     ```
+
+2. **Recreate the schema cleanly via Alembic:**
+   ```bash
+   uv run alembic upgrade head
+   ```
+
+3. **Verify synchronization:**
+   ```bash
+   uv run alembic check
+   ```
+
+---
+
+### Option 3: Data Purging Without Schema Destruction (DML Purge / Truncate)
+
+If you need to wipe table contents while preserving the existing DDL schema structure (e.g., between E2E test suites):
+
+#### A. Direct SQL Execution:
+When foreign key constraints are enforced, disable checks temporarily during bulk row removal to prevent constraint violation errors:
+
+* **SQLite:**
+  ```sql
+  PRAGMA foreign_keys = OFF;
+  DELETE FROM casbin_rule;
+  DELETE FROM users;
+  -- Reset autoincrement sequences if applicable
+  DELETE FROM sqlite_sequence WHERE name IN ('users', 'casbin_rule');
+  PRAGMA foreign_keys = ON;
+  VACUUM;
+  ```
+
+* **PostgreSQL:**
+  ```sql
+  TRUNCATE TABLE casbin_rule, users RESTART IDENTITY CASCADE;
+  ```
+
+#### B. Programmatic Reset Script (Python Async):
+Run cleanups via the application's asynchronous engine:
+```python
+import asyncio
+from sqlalchemy import text
+from src.database.engine import async_engine
+
+async def purge_all_data() -> None:
+    async with async_engine.begin() as conn:
+        await conn.execute(text("PRAGMA foreign_keys = OFF;"))
+        await conn.execute(text("DELETE FROM casbin_rule;"))
+        await conn.execute(text("DELETE FROM users;"))
+        await conn.execute(text("PRAGMA foreign_keys = ON;"))
+    print("Database data purged successfully.")
+
+if __name__ == "__main__":
+    asyncio.run(purge_all_data())
+```
