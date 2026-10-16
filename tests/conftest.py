@@ -25,7 +25,7 @@ TestSessionLocal = async_sessionmaker(
 
 import src.database.session
 import src.modules.audit.service
-
+from src.security import AuthorizationService
 
 @pytest_asyncio.fixture(autouse=True)
 async def init_test_database(monkeypatch):
@@ -34,7 +34,10 @@ async def init_test_database(monkeypatch):
     monkeypatch.setattr(src.modules.audit.service, "AsyncSessionLocal", TestSessionLocal)
     async with test_engine.begin() as conn:
         await conn.run_sync(BaseModel.metadata.create_all)
+    await AuthorizationService.initialize(test_engine)
+    await AuthorizationService.seed_default_policies()
     yield
+    AuthorizationService.reset()
     async with test_engine.begin() as conn:
         await conn.run_sync(BaseModel.metadata.drop_all)
 

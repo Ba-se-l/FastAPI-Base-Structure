@@ -2,14 +2,16 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.modules.auth.dependencies import get_current_user, require_role
+from src.modules.auth.dependencies import get_current_user, require_role, require_permission
 from src.settings import settings
 from src.share import (
+    Action,
+    AuditContext,
     PaginatedResponse,
     PaginationMeta,
     PaginationParams,
+    Resource,
     Roles,
-    AuditContext,
     get_audit_context
 )
 from . import service
@@ -37,13 +39,13 @@ async def get_my_profile(
     "",
     response_model=PaginatedResponse[UserResponse],
     status_code=status.HTTP_200_OK,
-    summary="List all users (Admin only)",
+    summary="List all users",
     description="Returns a paginated list of all registered users with metadata.",
 )
 async def list_users_endpoint(
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(require_role(Roles.ADMIN)),
+    _: User = Depends(require_permission(resource=Resource.USERS, action=Action.READ)),
 ) -> PaginatedResponse[UserResponse]:
     """Retrieves a paginated list of users."""
     users, total = await service.list_users(

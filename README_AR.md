@@ -144,13 +144,23 @@ fastapi-base-structure/
 
 ---
 
-### 2. التحكم في الوصول المستند للأدوار (RBAC)
-- **أدوار نوعية صارمة:** `Roles(StrEnum)` تحوي `USER` و `ADMIN`.
-- **فحص الصلاحيات بحقن التبعيات:**
+### 2. محرك الصلاحيات والتفويض المركزي (PyCasbin Authorization Engine)
+- **فصل الأدوار عن الصلاحيات (Policy-Based Decoupling):** الانتقال من التقييد الصلب بالدور إلى محرك سياسات مرن يخزن القواعد في جدول `casbin_rule`.
+- **أداء الذاكرة فائق السرعة (In-Memory Cache):** تحميل السياسات في الذاكرة العشوائية RAM عند إقلاع التطبيق وفحصها في أجزاء من الميكروثانية دون إجراء أي استعلام SQL في كل طلب.
+- **قاموس الصلاحيات الصارم:** تعريف الموارد `Resource` (`USERS`, `AUDIT`) والعمليات `Action` (`CREATE`, `READ`, `UPDATE`, `DELETE`, `EXPORT`, `ASSIGN_ROLE`).
+- **طبقة التوافق الذكية (Compatibility Projection):** دعم توافقي مزدوج: فحص الدور الرئيسي للمستخدم (`admin`, `user`) متبوعاً بفحص الصلاحيات المخصصة للمستخدم (`user:<id>`).
+- **فحص الصلاحيات بحقن التبعيات (`require_permission`):**
   ```python
-  @router.get("", dependencies=[Depends(require_role(Roles.ADMIN))])
+  @router.get("", dependencies=[Depends(require_permission(resource=Resource.USERS, action=Action.READ))])
   async def list_users(...):
       ...
+  ```
+- **أداة الإدارة والتحكم الكاملة (`manage.py` CLI):**
+  ```bash
+  python manage.py list-policies
+  python manage.py grant auditor audit read
+  python manage.py assign-role 10 auditor
+  python manage.py create-admin --email admin@domain.com --name "Root Admin"
   ```
 - **الحماية من استكشاف المستخدمين (User Enumeration Defense):** التحقق من الصلاحيات يتم **قبل** أي استعلام لقاعدة البيانات، مما يمنع المهاجم من التمييز بين المستخدم غير الموجود والمستخدم الممنوع من الوصول.
 

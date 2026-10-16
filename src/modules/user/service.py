@@ -1,7 +1,9 @@
+from _pytest.pytester import rex_outcome
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.exc import AccessDeniedException
-from src.share import AuditContext, Roles, UserAction, get_extra_dict_for_updates, event_bus
+from src.security import AuthorizationService
+from src.share import Action, AuditContext, Roles, Resource, UserAction, get_extra_dict_for_updates, event_bus
 
 from .events import (
     UserAccessDenied,
@@ -15,6 +17,18 @@ from .exc import UserInactiveException, UserNotFoundException
 from .model import User
 from .repo import UserRepository
 from .schemas import UserUpdate
+
+
+
+def _has_permission(actor: User, resource: Resource, action: Action) -> bool:
+
+    return AuthorizationService.is_allowed(
+        user_id=actor.id,
+        role=actor.role.value,
+        resource=resource.value,
+        action=action.value
+    )
+
 
 
 async def _get_user_by_id(
@@ -66,7 +80,7 @@ async def get_user_by_id(
         UserNotFoundException: If user does not exist.
     """
     # Security Rule: Authorize BEFORE querying to prevent User Enumeration attacks
-    if getter.role != Roles.ADMIN and getter.id != user_id:
+    if getter.id != user_id and not _has_permission(getter, Resource.USERS, Action.READ):
         await event_bus.publish(
             event=UserAccessDenied(
                 audit_ctx=audit_ctx,
@@ -126,7 +140,7 @@ async def update_user(
         UserInactiveException: If target user account is deactivated.
     """
     # 1. Authorize: Only Admin or Self can modify
-    if updater.role != Roles.ADMIN and updater.id != user_id:
+    if updater.id != user_id and not _has_permission(updater, Resource.USERS, Action.UPDATE):
         await event_bus.publish(
             event=UserAccessDenied(
                 audit_ctx=audit_ctx,
@@ -139,7 +153,7 @@ async def update_user(
         raise AccessDeniedException('You are not authorized to modify this user.')
 
     # 2. Authorize: Role escalation restriction
-    if schema.role is not None and updater.role != Roles.ADMIN:
+    if schema.role is not None and not _has_permission(updater, Resource.USERS, Action.ASSIGN_ROLE):
         await event_bus.publish(
             event=UserAccessDenied(
                 audit_ctx=audit_ctx,

@@ -1,0 +1,307 @@
+import argparse
+import asyncio
+import getpass
+import re
+import sys
+
+from pydantic import ValidationError
+
+from src.database import AsyncEngineLocal, AsyncSessionLocal
+from src.modules.auth.schemas import RegisterRequest
+from src.modules.user import User, UserRepository
+from src.security import AuthorizationService, hash_password
+from src.share import Action, Resource, Roles
+
+ROLE_NAME_PATTERN = re.compile(r'^[a-z][a-z0-9_]{1,49}$')
+
+
+def validate_role_name(role: str) -> None:
+    """Validates that a role name follows naming standards and does not collide with user subjects.
+
+    Args:
+        role: The role name string to validate.
+
+    Raises:
+        ValueError: If the role name is malformed or uses the reserved 'user:' prefix.
+    """
+    if role.startswith('user:'):
+        raise ValueError("Role names cannot begin with the reserved prefix 'user:'.")
+    if not ROLE_NAME_PATTERN.match(role):
+        raise ValueError(
+            f"Invalid role name '{role}'. Must be 2-50 characters, lowercase alphanumeric with underscores."
+        )
+
+
+def validate_resource(resource: str) -> None:
+    """Validates that a resource token matches a known Resource or wildcard.
+
+    Args:
+        resource: Target resource string.
+
+    Raises:
+        ValueError: If resource is not recognized.
+    """
+    allowed = {r.value for r in Resource} | {'*'}
+    if resource not in allowed:
+        raise ValueError(f"Unknown resource '{resource}'. Allowed values: {sorted(allowed)}")
+
+
+def validate_action(action: str) -> None:
+    """Validates that an action token matches a known Action or wildcard.
+
+    Args:
+        action: Target action string.
+
+    Raises:
+        ValueError: If action is not recognized.
+    """
+    allowed = {a.value for a in Action} | {'*'}
+    if action not in allowed:
+        raise ValueError(f"Unknown action '{action}'. Allowed values: {sorted(allowed)}")
+
+
+async def handle_seed_policies() -> None:
+    """Seeds baseline authorization rules into the Casbin storage."""
+    await AuthorizationService.initialize(AsyncEngineLocal)
+    count = await AuthorizationService.seed_default_policies()
+    print(f"Successfully seeded default policies ({count} new rule(s) added).")
+
+
+async def handle_create_admin(args: argparse.Namespace) -> None:
+    """Creates a new user account with administrator privileges."""
+    password = args.password
+    if not password:
+        password = getpass.getpass("Enter admin password: ")
+        confirm_password = getpass.getpass("Confirm admin password: ")
+        if password != confirm_password:
+            print("Error: Passwords do not match.", file=sys.stderr)
+            sys.exit(1)
+
+    try:
+        validated = RegisterRequest(
+            name=args.name,
+            email=args.email,
+            password=password,
+        )
+    except ValidationError as exc:
+        print("Validation Error:", file=sys.stderr)
+        for err in exc.errors():
+            loc = ' -> '.join(str(p) for p in err['loc'])
+            print(f"  - {loc}: {err['msg']}", file=sys.stderr)
+        sys.exit(1)
+
+    async with AsyncSessionLocal() as session:
+        user_repo = UserRepository(session=session)
+        existing = await user_repo.get_by_email(validated.email)
+        if existing:
+            print(f"Error: A user with email '{validated.email}' already exists.", file=sys.stderr)
+            sys.exit(1)
+
+        admin_user = User(
+            name=validated.name,
+            email=validated.email,
+            hashed_password=hash_password(validated.password),
+            role=Roles.ADMIN,
+            is_active=True,
+            security_version=1,
+        )
+        created = await user_repo.create(admin_user)
+        await session.commit()
+        print(f"Admin user successfully created with ID {created.id} (email: {created.email}).")
+
+
+async def handle_promote_admin(args: argparse.Namespace) -> None:
+    """Elevates an existing user account to administrator role."""
+    async with AsyncSessionLocal() as session:
+        user_repo = UserRepository(session=session)
+        user = await user_repo.get_by_email(args.email.strip().lower())
+        if not user:
+            print(f"Error: No user found with email '{args.email}'.", file=sys.stderr)
+            sys.exit(1)
+
+        if not user.is_active:
+            print(f"Error: User '{args.email}' is deactivated and cannot be promoted.", file=sys.stderr)
+            sys.exit(1)
+
+        await user_repo.update(instance=user, update_dict={'role': Roles.ADMIN})
+        await session.commit()
+        print(f"User '{user.email}' (ID: {user.id}) successfully promoted to Admin.")
+
+
+async def handle_grant(args: argparse.Namespace) -> None:
+    """Grants a permission policy to a role."""
+    validate_role_name(args.role)
+    validate_resource(args.resource)
+    validate_action(args.action)
+
+    enforcer = await AuthorizationService.initialize(AsyncEngineLocal)
+    if enforcer.has_policy(args.role, args.resource, args.action):
+        print(f"Policy already exists: ({args.role}, {args.resource}, {args.action}).")
+        return
+
+    await enforcer.add_policy(args.role, args.resource, args.action)
+    print(f"Successfully granted: ({args.role}, {args.resource}, {args.action}).")
+
+
+async def handle_revoke(args: argparse.Namespace) -> None:
+    """Revokes a permission policy from a role."""
+    if args.role == 'admin' and args.resource == '*' and args.action == '*' and not args.force:
+        print(
+            "Safety Warning: Revoking (admin, *, *) will lock out all administrators.\n"
+            "If you really intend to do this, pass the --force flag.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    enforcer = await AuthorizationService.initialize(AsyncEngineLocal)
+    removed = await enforcer.remove_policy(args.role, args.resource, args.action)
+    if removed:
+        print(f"Successfully revoked: ({args.role}, {args.resource}, {args.action}).")
+    else:
+        print(f"Policy not found: ({args.role}, {args.resource}, {args.action}).")
+
+
+async def handle_assign_role(args: argparse.Namespace) -> None:
+    """Assigns an authorization role to a specific user identifier."""
+    validate_role_name(args.role)
+
+    async with AsyncSessionLocal() as session:
+        user_repo = UserRepository(session=session)
+        user = await user_repo.get_by_id(args.user_id)
+        if not user:
+            print(f"Error: User with ID {args.user_id} does not exist.", file=sys.stderr)
+            sys.exit(1)
+
+    enforcer = await AuthorizationService.initialize(AsyncEngineLocal)
+    subject = AuthorizationService.user_subject(args.user_id)
+    if enforcer.has_grouping_policy(subject, args.role):
+        print(f"User {args.user_id} is already assigned to role '{args.role}'.")
+        return
+
+    await enforcer.add_grouping_policy(subject, args.role)
+    print(f"Successfully assigned role '{args.role}' to user {args.user_id} ({subject}).")
+
+
+async def handle_unassign_role(args: argparse.Namespace) -> None:
+    """Removes a role assignment from a specific user identifier."""
+    enforcer = await AuthorizationService.initialize(AsyncEngineLocal)
+    subject = AuthorizationService.user_subject(args.user_id)
+    removed = await enforcer.remove_grouping_policy(subject, args.role)
+    if removed:
+        print(f"Successfully removed role '{args.role}' from user {args.user_id}.")
+    else:
+        print(f"Role assignment not found for user {args.user_id} on role '{args.role}'.")
+
+
+async def handle_list_policies() -> None:
+    """Prints all active Casbin permission policies and role grouping links."""
+    enforcer = await AuthorizationService.initialize(AsyncEngineLocal)
+    policies = enforcer.get_policy()
+    groupings = enforcer.get_grouping_policy()
+
+    print("\n--- Active Permission Policies ('p') ---")
+    if not policies:
+        print("  (No active policies)")
+    else:
+        print(f"  {'ROLE / SUBJECT':<20} {'RESOURCE':<15} {'ACTION':<15}")
+        print("  " + "-" * 50)
+        for p in policies:
+            sub = p[0] if len(p) > 0 else ''
+            obj = p[1] if len(p) > 1 else ''
+            act = p[2] if len(p) > 2 else ''
+            print(f"  {sub:<20} {obj:<15} {act:<15}")
+
+    print("\n--- Active Role Groupings ('g') ---")
+    if not groupings:
+        print("  (No active groupings)")
+    else:
+        print(f"  {'MEMBER':<20} {'ROLE':<20}")
+        print("  " + "-" * 40)
+        for g in groupings:
+            member = g[0] if len(g) > 0 else ''
+            role = g[1] if len(g) > 1 else ''
+            print(f"  {member:<20} {role:<20}")
+    print()
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Constructs the CLI argument parser with all administrative commands."""
+    parser = argparse.ArgumentParser(
+        description="FastAPI Base Structure Administrative Management CLI"
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # seed-policies
+    subparsers.add_parser("seed-policies", help="Seed default authorization policies")
+
+    # create-admin
+    create_admin_p = subparsers.add_parser("create-admin", help="Create a new administrator user")
+    create_admin_p.add_argument("--email", required=True, help="Administrator email address")
+    create_admin_p.add_argument("--name", required=True, help="Administrator display name")
+    create_admin_p.add_argument("--password", help="Administrator password (prompted if omitted)")
+
+    # promote-admin
+    promote_admin_p = subparsers.add_parser("promote-admin", help="Promote an existing user to admin")
+    promote_admin_p.add_argument("--email", required=True, help="Target user email address")
+
+    # grant
+    grant_p = subparsers.add_parser("grant", help="Grant a permission rule to a role")
+    grant_p.add_argument("role", help="Target role name (e.g. auditor, manager)")
+    grant_p.add_argument("resource", help="Target resource or '*' (e.g. users, audit)")
+    grant_p.add_argument("action", help="Target action or '*' (e.g. read, export)")
+
+    # revoke
+    revoke_p = subparsers.add_parser("revoke", help="Revoke a permission rule from a role")
+    revoke_p.add_argument("role", help="Target role name")
+    revoke_p.add_argument("resource", help="Target resource or '*'")
+    revoke_p.add_argument("action", help="Target action or '*'")
+    revoke_p.add_argument("--force", action="store_true", help="Force revocation of critical policies")
+
+    # assign-role
+    assign_p = subparsers.add_parser("assign-role", help="Assign a role to a user ID")
+    assign_p.add_argument("user_id", type=int, help="Target user integer ID")
+    assign_p.add_argument("role", help="Role name to assign")
+
+    # unassign-role
+    unassign_p = subparsers.add_parser("unassign-role", help="Remove a role assignment from a user ID")
+    unassign_p.add_argument("user_id", type=int, help="Target user integer ID")
+    unassign_p.add_argument("role", help="Role name to remove")
+
+    # list-policies
+    subparsers.add_parser("list-policies", help="List all policies and role groupings")
+
+    return parser
+
+
+def main() -> None:
+    """Maestro entry point dispatching CLI subcommands."""
+    parser = build_parser()
+    args = parser.parse_args()
+
+    command_handlers = {
+        'seed-policies': lambda: handle_seed_policies(),
+        'create-admin': lambda: handle_create_admin(args),
+        'promote-admin': lambda: handle_promote_admin(args),
+        'grant': lambda: handle_grant(args),
+        'revoke': lambda: handle_revoke(args),
+        'assign-role': lambda: handle_assign_role(args),
+        'unassign-role': lambda: handle_unassign_role(args),
+        'list-policies': lambda: handle_list_policies(),
+    }
+
+    handler = command_handlers.get(args.command)
+    if not handler:
+        parser.print_help()
+        sys.exit(1)
+
+    try:
+        asyncio.run(handler())
+    except (ValueError, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        asyncio.run(AsyncEngineLocal.dispose())
+
+
+if __name__ == '__main__':
+    main()

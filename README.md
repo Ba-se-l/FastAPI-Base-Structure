@@ -137,15 +137,24 @@ fastapi-base-structure/
 - **Enterprise Password Hashing:** Uses state-of-the-art `Argon2` via `pwdlib` with transparent, automatic hash upgrade migration (`verify_and_update`).
 - **Credential-State Binding:** Access tokens enforce `security_version` matching, instantly invalidating active sessions upon password changes.
 
-### 2. Role-Based Access Control (RBAC)
-- **Typed Roles:** Strict `Roles(StrEnum)` containing `USER` and `ADMIN`.
-- **Dependency Factory:** Clean declarator `require_role(Roles.ADMIN)` applied seamlessly on endpoints:
+### 2. Authorization & Policy Engine (PyCasbin)
+- **Granular Policy Architecture:** Decouples user roles from permissions. Uses `casbin` (AsyncEnforcer) with `casbin-async-sqlalchemy-adapter` storing rules in `casbin_rule`.
+- **In-Memory Policy Cache:** Policies are loaded at startup (`lifespan`) and evaluated in-memory within microseconds with zero database queries per request.
+- **Permission Vocabulary:** Strict `Resource(StrEnum)` (`USERS`, `AUDIT`) and `Action(StrEnum)` (`CREATE`, `READ`, `UPDATE`, `DELETE`, `EXPORT`, `ASSIGN_ROLE`).
+- **Compatibility Projection:** Backward-compatible dual evaluation: checks `enforce(role, resource, action)` first, then user-level grants `enforce('user:<id>', resource, action)`.
+- **Declarative Dependency Factory:** Clean endpoint protection via `require_permission`:
   ```python
-  @router.get("", dependencies=[Depends(require_role(Roles.ADMIN))])
+  @router.get("", dependencies=[Depends(require_permission(resource=Resource.USERS, action=Action.READ))])
   async def list_users(...):
       ...
   ```
-
+- **Administrative CLI (`manage.py`):** Full control over policies and roles:
+  ```bash
+  python manage.py list-policies
+  python manage.py grant auditor audit read
+  python manage.py assign-role 10 auditor
+  python manage.py create-admin --email admin@domain.com --name "Root Admin"
+  ```
 ### 3. Database & Async Alembic Migrations
 - **SQLAlchemy 2.0 Async Native:** Built around `AsyncEngine` and `async_sessionmaker`.
 - **Constraint Naming Conventions:** Standardized naming (`ix_`, `uq_`, `ck_`, `fk_`, `pk_`) ensures 100% reliable automated migration generation across SQLite and PostgreSQL.

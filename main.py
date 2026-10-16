@@ -18,6 +18,7 @@ from src.settings import settings
 from src.share import ErrorDetail, ErrorResponse, _HTTP_ERROR_CODE_MAP
 from src.share.event_bus import event_bus
 from src.modules.audit.listeners import register_audit_listeners
+from src.security import AuthorizationService
 
 # Configure structured logging
 logging.basicConfig(
@@ -36,11 +37,15 @@ if settings.audit_enabled:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manages application lifecycle events.
 
-    On startup: Verifies database connectivity.
+    On startup: Verifies database connectivity and initializes authorization policies.
     On shutdown: Closes and disposes engine connection pool.
     """
     logger.info('Verifying database connectivity...')
     await check_database_connection()
+
+    logger.info('Loading authorization policies into memory...')
+    await AuthorizationService.initialize(AsyncEngineLocal)
+
     logger.info('Application startup complete.')
 
     yield

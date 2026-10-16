@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
@@ -14,13 +15,15 @@ from src.exc import (
     InvalidCredentialsException,
     TokenStaleException,
 )
-from src.security import decode_access_token
+from src.security import decode_access_token, AuthorizationService
 from src.settings import settings
-from src.share import Roles
+from src.share import Roles, Resource, Action
 
 if TYPE_CHECKING:
     from src.modules.user import User
 
+
+logger = logging.getLogger(__name__)
 
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f'{settings.api_prefix}/auth/login')
 
@@ -107,3 +110,46 @@ def require_role(*allowed_roles: Roles) -> Callable[[User], Awaitable[User]]:
         return current_user
 
     return _role_checker
+
+
+def require_permission(
+    *,
+    resource: Resource,
+    action: Action,
+) -> Callable[[User], Awaitable[User]]:
+    """Dependency factory enforcing a Casbin permission check on the current user.
+
+    Args:
+        resource: The protected resource namespace.
+        action: The operation requested on the resource.
+
+    Returns:
+        An async FastAPI dependency returning the authorized User instance.
+
+    Raises:
+        AccessDeniedException: If neither the user's role nor specific subject grants permit the action.
+    """
+
+    async def _permission_checker(
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        allowed = AuthorizationService.is_allowed(
+            user_id=current_user.id,
+            role=current_user.role.value,
+            resource=resource.value,
+            action=action.value,
+        )
+        if not allowed:
+            logger.warning(
+                'Permission denied: user_id=%s role=%s resource=%s action=%s',
+                current_user.id,
+                current_user.role.value,
+                resource.value,
+                action.value,
+            )
+            raise AccessDeniedException(
+                f"You do not have permission to perform '{action.value}' on '{resource.value}'."
+            )
+        return current_user
+
+    return _permission_checker

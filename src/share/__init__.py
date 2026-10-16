@@ -1,4 +1,4 @@
-from .enum import Roles, TokenType, UserAction
+from .enum import Roles, TokenType, UserAction, Resource, Action
 
 
 from .event_bus import event_bus
@@ -31,6 +31,8 @@ __all__ = (
     'Roles',
     'TokenType',
     'UserAction',
+    'Resource',
+    'Action',
 
 
     'event_bus',

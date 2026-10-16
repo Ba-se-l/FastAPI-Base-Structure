@@ -2,13 +2,15 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.modules.auth.dependencies import require_role
+from src.modules.auth.dependencies import require_role, require_permission
 from src.modules.user.model import User
 from src.settings import settings
 from src.share import (
+    Action,
     PaginatedResponse,
     PaginationMeta,
     PaginationParams,
+    Resource,
     Roles,
 )
 from . import service
@@ -32,7 +34,7 @@ async def list_audit_logs_endpoint(
     severity: LogSeverity | None = Query(None, description='Filter by severity level'),
     search: str | None = Query(None, description='Search narrative message'),
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(require_role(Roles.ADMIN)),
+    _: User = Depends(require_permission(resource=Resource.AUDIT, action=Action.READ)),
 ) -> PaginatedResponse[LogResponse]:
     """Retrieves filtered, paginated audit entries for administrators."""
     filter_params = LogQueryFilter(
@@ -68,7 +70,7 @@ async def get_user_logs_endpoint(
     user_id: str,
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(require_role(Roles.ADMIN)),
+    _: User = Depends(require_permission(resource=Resource.AUDIT, action=Action.READ)),
 ) -> PaginatedResponse[LogResponse]:
     """Retrieves paginated audit log entries for a single user."""
     logs, total = await service.get_user_audit_logs(
@@ -99,7 +101,7 @@ async def export_audit_logs_endpoint(
     event_type: str | None = Query(None, description='Filter export by event category'),
     severity: LogSeverity | None = Query(None, description='Filter export by severity'),
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(require_role(Roles.ADMIN)),
+    _: User = Depends(require_permission(resource=Resource.AUDIT, action=Action.EXPORT)),
 ) -> Response:
     """Streams a serialized audit export file to the client."""
     params = LogExportParams(
@@ -129,7 +131,7 @@ async def export_user_logs_endpoint(
     user_id: str,
     format: ExportFormat = Query(ExportFormat.MARKDOWN, description='Output format (json, txt, md)'),
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(require_role(Roles.ADMIN)),
+    _: User = Depends(require_permission(resource=Resource.AUDIT, action=Action.EXPORT)),
 ) -> Response:
     """Exports a specific user audit report as a downloadable file."""
     params = LogExportParams(
