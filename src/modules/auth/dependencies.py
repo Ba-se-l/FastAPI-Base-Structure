@@ -19,6 +19,8 @@ from src.security import decode_access_token, AuthorizationService
 from src.settings import settings
 from src.share import Roles, Resource, Action
 
+from .repo import RefreshSessionRepository
+
 if TYPE_CHECKING:
     from src.modules.user import User
 
@@ -44,6 +46,8 @@ async def get_current_user(
     Raises:
         InvalidCredentialsException: If the token is invalid or the user does not exist.
         InactiveEntityException: If the user account has been deactivated.
+        TokenStaleException: If the token security version does not match the user's current version
+            or if the associated session family has been revoked.
     """
     payload = decode_access_token(token=token)
     user_id = payload.sub
@@ -60,12 +64,18 @@ async def get_current_user(
     if user is None:
         raise InvalidCredentialsException()
 
+    if not user.is_active:
+        raise InactiveEntityException(entity='User', identifier=str(user.id))
 
     if payload.security_version != user.security_version:
         raise TokenStaleException()
 
-    if not user.is_active:
-        raise InactiveEntityException(entity='User', identifier=str(user.id))
+    
+    if payload.fid is not None:
+        refresh_repo = RefreshSessionRepository(session=session)
+        is_active = await refresh_repo.is_family_active(family_id=payload.fid, user_id=user.id)
+        if not is_active:
+            raise TokenStaleException()
 
     return user
 

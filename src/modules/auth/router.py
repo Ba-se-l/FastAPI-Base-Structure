@@ -93,7 +93,7 @@ async def logout_all_endpoint(
     audit_ctx: AuditContext = Depends(get_audit_context)
 ) -> MessageResponse:
     """Revokes all refresh sessions for the current user."""
-    await service.logout_all(user_id=current_user.id, session=session, audit_ctx=audit_ctx)
+    await service.logout_all(user=current_user, session=session, audit_ctx=audit_ctx)
     return MessageResponse(message="All sessions revoked successfully.")
 
 

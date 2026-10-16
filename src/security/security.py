@@ -56,13 +56,17 @@ def verify_and_update(password: str, hashed_password: str) -> tuple[bool, str | 
 def create_access_token(
     user_id: int,
     security_version: int = 1,
+    family_id: str | None = None,
     expires_delta: timedelta | None = None
 ) -> str:
     """Generates a signed JWT access token for authentication.
 
     Args:
-        user_id: The authenticated user.
+        user_id: The primary key of the authenticated user.
+        security_version: Current credential/security version of the user.
+        family_id: Optional session family lineage identifier.
         expires_delta: Optional custom duration before expiration. Defaults to settings value.
+
 
     Returns:
         A signed JWT access token string.
@@ -79,6 +83,7 @@ def create_access_token(
         iat=now,
         security_version=security_version,
         exp=now + expires_delta,
+        fid=family_id,
     )
 
     return jwt.encode(
@@ -90,12 +95,14 @@ def create_access_token(
 
 def create_refresh_token(
     user_id: int,
+    family_id: str | None = None,
     jti: str | None = None
 ) -> tuple[str, str]:
     """Generates a signed JWT refresh token with an assigned unique JTI identifier.
 
     Args:
         user: The authenticated user.
+        family_id: Optional session family lineage identifier.
         jti: Optional pre-assigned JWT ID string. If None, a random UUID hex is generated.
 
     Returns:
@@ -114,14 +121,15 @@ def create_refresh_token(
         iat=now,
         security_version=1,
         exp=now + expires_delta,
+        fid=family_id,
     )
 
-    token = jwt.encode(
-        payload.model_dump(),
+    
+    return jwt.encode(
+        payload.model_dump(exclude_none=True),
         key=settings.refresh_secret_key,
         algorithm=settings.algorithm,
-    )
-    return token, jti
+    ), jti
 
 
 def decode_access_token(token: str) -> TokenPayload:

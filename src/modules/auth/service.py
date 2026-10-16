@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import IntegrityError
@@ -55,6 +56,8 @@ async def _issue_token_pair(
     session: AsyncSession,
     device_info: str | None = None,
     ctx: AuditContext | None = None,
+    family_id: str | None = None,
+    parent_jti: str | None = None,
 ) -> TokenResponse:
     """Creates an access + refresh token pair and persists the refresh session.
 
@@ -63,15 +66,28 @@ async def _issue_token_pair(
         session: The active database session.
         device_info: Optional client device identifier.
         ctx: Optional audit context.
+        family_id: Session lineage family identifier. Generated fresh if None.
+        parent_jti: JTI of the predecessor token in the family tree.
 
     Returns:
         A TokenResponse containing both tokens.
     """
-    # Step 1: Generate access token
-    access_token = create_access_token(user_id=user.id, security_version=user.security_version)
 
-    # Step 2: Generate refresh token + JTI
-    refresh_token, jti = create_refresh_token(user_id=user.id)
+    if family_id is None:
+        family_id = uuid.uuid4().hex
+
+    # Step 1: Generate access token with family claim fid
+    access_token = create_access_token(
+        user_id=user.id,
+        security_version=user.security_version,
+        family_id=family_id,
+    )
+
+    # Step 2: Generate refresh token + JTI with family claim fid
+    refresh_token, jti = create_refresh_token(
+        user_id=user.id,
+        family_id=family_id,
+    )
 
     # Step 3: Persist refresh session to database
     refresh_repo = RefreshSessionRepository(session=session)
@@ -81,6 +97,8 @@ async def _issue_token_pair(
         device_info=device_info,
         is_revoked=False,
         expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expires_days),
+        family_id=family_id,
+        parent_jti=parent_jti,
     )
     await refresh_repo.create(instance=refresh_session)
     await session.flush()
@@ -269,7 +287,7 @@ async def logout(
     session: AsyncSession,
     audit_ctx: AuditContext | None = None,
 ) -> None:
-    """Revokes a single refresh session (logout current device).
+    """Revokes a single refresh session and its family (logout current device).
 
     Args:
         refresh_token_str: The refresh token to revoke.
@@ -283,7 +301,11 @@ async def logout(
     jti = payload.jti
 
     refresh_repo = RefreshSessionRepository(session=session)
-    await refresh_repo.revoke_by_jti(jti=jti)
+    existing_session = await refresh_repo.get_by_jti(jti=jti)
+    if existing_session is not None:
+        await refresh_repo.revoke_family(family_id=existing_session.family_id)
+    else:
+        await refresh_repo.revoke_by_jti(jti=jti)
 
     await event_bus.publish(
         event=AuthLoggedOut(
@@ -295,27 +317,43 @@ async def logout(
 
 
 async def logout_all(
-    user_id: int,
+    user: User | int,
     session: AsyncSession,
     audit_ctx: AuditContext | None = None,
-) -> None:
-    """Revokes all refresh sessions for a user (logout all devices).
+) -> int:
+    """Revokes all refresh sessions and increments security version (logout all devices).
 
     Args:
-        user_id: The user's primary key.
+        user: The authenticated User instance or user integer ID.
         session: The active database session.
         audit_ctx: Optional audit context.
+
+    Returns:
+        The number of revoked session records.
     """
+    if isinstance(user, int):
+        user_repo = UserRepository(session=session)
+        user_obj = await user_repo.get_by_id(user)
+        if user_obj is None:
+            raise UserNotFoundException(identifier=str(user))
+    else:
+        user_obj = user
+
     refresh_repo = RefreshSessionRepository(session=session)
-    await refresh_repo.revoke_all_for_user(user_id=user_id)
+    revoked_count = await refresh_repo.revoke_all_for_user(user_id=user_obj.id)
+
+    user_obj.security_version += 1
+    session.add(user_obj)
+    await session.flush()
 
     await event_bus.publish(
         event=AuthAllSessionsRevoked(
             audit_ctx=audit_ctx,
-            user_id=user_id,
+            user_id=user_obj.id,
         ),
         session=session,
     )
+    return revoked_count
 
 
 async def refresh_token(
@@ -405,15 +443,20 @@ async def refresh_token(
     # Step 4: Atomic CAS revocation (prevents concurrent double-successor race condition)
     revoked = await refresh_repo.revoke_if_active(jti=jti)
     if not revoked:
-        # Session was already revoked concurrently or reused — potential token theft
-        await refresh_repo.revoke_all_for_user(user_id=user_id)
+        # Session was already revoked concurrently or reused — potential token theft!
+        # Targeted Family Revocation (Smart Device Isolation)
+        await refresh_repo.revoke_family(family_id=existing_session.family_id)
         await event_bus.publish(
             event=AuthTokenReplayDetected(
                 audit_ctx=audit_ctx,
                 user_id=user_id,
                 session_id=existing_session.id,
-            )
+            ),
+            session=session,
         )
+        # CRITICAL FIX: Commit immediately before raising exception
+        # to prevent get_session() from rolling back our security revocation!
+        await session.commit()
         raise TokenRevokedException()
 
     await event_bus.publish(
@@ -424,12 +467,14 @@ async def refresh_token(
         session=session,
     )
 
-    # Step 5: Issue a fresh pair
+    # Step 5: Issue a fresh pair inheriting the SAME family_id
     return await _issue_token_pair(
         user=user,
         session=session,
         device_info=audit_ctx.user_agent if audit_ctx else None,
         ctx=audit_ctx,
+        family_id=existing_session.family_id,
+        parent_jti=existing_session.refresh_token_jti,
     )
 
 

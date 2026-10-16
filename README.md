@@ -309,7 +309,7 @@ fastapi-base-structure/
 │       ├── enum.py             # Roles, Resource, Action, Severity enums
 │       ├── event_bus.py        # In-memory asynchronous domain event dispatcher
 │       └── responses.py        # Standardized SuccessResponse, PaginatedResponse, ErrorResponse
-└── tests/                      # Automated test suite (40 test scenarios)
+└── tests/                      # Automated test suite (44 test scenarios)
     ├── conftest.py             # Isolated async SQLite fixtures & HTTP test clients
     ├── README.md               # Test documentation (English)
     └── README_AR.md            # Test documentation (Arabic)
@@ -319,17 +319,17 @@ fastapi-base-structure/
 
 ## 🧪 Automated Testing
 
-The project maintains **100% test pass rate** with 40 automated test scenarios covering the full API contract, security boundaries, and edge cases against an isolated in-memory SQLite database:
+The project maintains **100% test pass rate** with 44 automated test scenarios covering the full API contract, security boundaries, and edge cases against an isolated in-memory SQLite database:
 
 ```bash
 # Run all tests with verbose output
 uv run pytest -v
 
 # Run authorization and Casbin tests
-uv run pytest tests/test_phase2_authorization.py -v
+uv run pytest tests/test_casbin_authorization.py -v
 
 # Run password change and session invalidation tests
-uv run pytest tests/test_phase1_security_hardening.py -v
+uv run pytest tests/test_password_change.py -v
 
 # Run audit logging and telemetry tests
 uv run pytest tests/test_audit_logging.py -v

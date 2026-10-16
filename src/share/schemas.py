@@ -32,6 +32,7 @@ class TokenPayload(Base):
     iat: datetime
     security_version: int 
     exp: datetime
+    fid: str | None = None
 
 class TokenResponse(Base):
     access_token: str

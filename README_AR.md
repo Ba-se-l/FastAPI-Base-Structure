@@ -309,7 +309,7 @@ fastapi-base-structure/
 │       ├── enum.py             # تعدادات الأدوار، الموارد، والعمليات
 │       ├── event_bus.py        # وسيط أحداث النطاق غير المتزامن في الذاكرة
 │       └── responses.py        # أغلفة الاستجابة القياسية (SuccessResponse, PaginatedResponse, ErrorResponse)
-└── tests/                      # منظومة الاختبارات المؤتمتة (40 سيناريو فحص)
+└── tests/                      # منظومة الاختبارات المؤتمتة (44 سيناريو فحص)
     ├── conftest.py             # إعدادات وعملاء الاختبار غير المتزامنة مع SQLite في الذاكرة
     ├── README.md               # توثيق الاختبارات (English)
     └── README_AR.md            # توثيق الاختبارات (العربية)
@@ -319,17 +319,17 @@ fastapi-base-structure/
 
 ## 🧪 منظومة الاختبارات المؤتمتة
 
-يحافظ المشروع على **نسبة نجاح 100%** عبر 40 سيناريو فحص آلي تغطي كافة عقود الـ API، صمامات الأمان، والحالات الحدية بالاعتماد على قاعدة بيانات SQLite معزولة في الذاكرة:
+يحافظ المشروع على **نسبة نجاح 100%** عبر 44 سيناريو فحص آلي تغطي كافة عقود الـ API، صمامات الأمان، والحالات الحدية بالاعتماد على قاعدة بيانات SQLite معزولة في الذاكرة:
 
 ```bash
 # تشغيل كافة الاختبارات مع التفاصيل
 uv run pytest -v
 
 # تشغيل اختبارات نظام الصلاحيات ومحرك Casbin
-uv run pytest tests/test_phase2_authorization.py -v
+uv run pytest tests/test_casbin_authorization.py -v
 
 # تشغيل اختبارات تغيير كلمة المرور وإبطال الجلسات
-uv run pytest tests/test_phase1_security_hardening.py -v
+uv run pytest tests/test_password_change.py -v
 
 # تشغيل اختبارات التدقيق الأمني والمصاب المزدوجة
 uv run pytest tests/test_audit_logging.py -v
