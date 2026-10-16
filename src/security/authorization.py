@@ -1,4 +1,3 @@
-from _pytest.pytester import rex_outcome
 import logging
 from pathlib import Path
 

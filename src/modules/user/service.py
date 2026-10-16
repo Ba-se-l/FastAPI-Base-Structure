@@ -1,4 +1,3 @@
-from _pytest.pytester import rex_outcome
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.exc import AccessDeniedException
