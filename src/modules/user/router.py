@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.modules.auth.dependencies import get_current_user, require_role, require_permission
+from src.database import get_session
+from src.modules.auth.dependencies import get_current_user, require_permission, require_role
 from src.settings import settings
 from src.share import (
     Action,
@@ -12,7 +13,7 @@ from src.share import (
     PaginationParams,
     Resource,
     Roles,
-    get_audit_context
+    get_audit_context,
 )
 from . import service
 from .model import User

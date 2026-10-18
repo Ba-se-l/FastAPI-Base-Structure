@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.modules.auth.dependencies import require_role, require_permission
+from src.modules.auth.dependencies import require_permission, require_role
 from src.modules.user.model import User
 from src.settings import settings
 from src.share import (

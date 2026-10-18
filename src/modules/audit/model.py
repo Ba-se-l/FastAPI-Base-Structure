@@ -5,6 +5,12 @@ from sqlalchemy import DateTime, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database import BaseModel as Base
+from src.share import (
+    AUDIT_IP_MAX,
+    AUDIT_REQUEST_ID_MAX,
+    AUDIT_USER_AGENT_MAX,
+    AUDIT_USER_ID_MAX,
+)
 
 
 class AuditLog(Base):
@@ -33,10 +39,10 @@ class AuditLog(Base):
     severity: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
 
-    user_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
-    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(AUDIT_USER_ID_MAX), nullable=True, index=True)
+    request_id: Mapped[str | None] = mapped_column(String(AUDIT_REQUEST_ID_MAX), nullable=True, index=True)
+    ip_address: Mapped[str | None] = mapped_column(String(AUDIT_IP_MAX), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(AUDIT_USER_AGENT_MAX), nullable=True)
 
     extra_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 

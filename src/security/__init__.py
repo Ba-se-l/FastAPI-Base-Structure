@@ -9,7 +9,6 @@ from .security import (
     SECURITY_PASSWORD_HASH
 )
 
-
 from .authorization import AuthorizationNotInitializedError, AuthorizationService
 from .casbin_rule import CasbinRule
 

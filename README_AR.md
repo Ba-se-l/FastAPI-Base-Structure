@@ -11,7 +11,7 @@
     <a href="https://casbin.org/"><img src="https://img.shields.io/badge/PyCasbin-RBAC_Engine-0052CC.svg?style=flat" alt="PyCasbin RBAC"></a>
     <a href="https://docs.astral.sh/uv/"><img src="https://img.shields.io/badge/Toolchain-uv-DE5FE9.svg?style=flat" alt="uv Package Manager"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/الاختبارات-40%2F40_ناجح-brightgreen.svg?style=flat" alt="40/40 Tests Passing">
+    <img src="https://img.shields.io/badge/الاختبارات-64%2F64_ناجح-brightgreen.svg?style=flat" alt="64/64 Tests Passing">
   </p>
 
   <p>
@@ -62,7 +62,7 @@ flowchart TD
         Service --> EventBus["وسيط الأحداث في الذاكرة (EventBus)"]
         EventBus --> AuditHandler["معالج أحداث التدقيق الأمني"]
         AuditHandler --> SinkDB[("مصب قاعدة البيانات (audit_logs)")]
-        AuditHandler --> SinkFile["مصب الملفات النصية (logs/audit.log NDJSON)"]
+        AuditHandler --> SinkFile["مصب الملفات اليومية (logs/ متعدد الصيغ)"]
     end
 
     subgraph OOB ["الإدارة المباشرة خارج النطاق"]
@@ -126,7 +126,7 @@ async def list_users(
 | **هجرات المخطط** | [Alembic](https://alembic.sqlalchemy.org/) | `>= 1.19.1` | تتبع تطور قاعدة البيانات وضبط القيود تلقائياً |
 | **محرك الصلاحيات** | [PyCasbin](https://casbin.org/) | `>= 1.43.0` | محرك أذونات ديناميكي في الذاكرة مبني على معايير RBAC/ABAC |
 | **التشفير والأمان** | [pwdlib[argon2]](https://github.com/frankie567/pwdlib) / [PyJWT](https://pyjwt.readthedocs.io/) | `>= 0.3.1` / `>= 2.13.0` | تشفير وتدقيق كلمات المرور بـ Argon2id وترميز توكنات الـ JWT |
-| **منظومة الاختبار** | [pytest](https://pytest.org/) / [httpx](https://www.python-httpx.org/) | `>= 9.1` / `>= 0.28` | 40 اختبار مؤتمت يغطي كافة المسارات والحالات الحدية بنجاح 100% |
+| **منظومة الاختبار** | [pytest](https://pytest.org/) / [httpx](https://www.python-httpx.org/) | `>= 9.1` / `>= 0.28` | 64 اختباراً مؤتمتاً يغطي كافة المسارات والحالات الحدية بنجاح 100% |
 
 ---
 
@@ -175,7 +175,7 @@ uv run uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ### 6. التحقق من سلامة النظام
 ```bash
 curl http://127.0.0.1:8000/health
-# المخرجات المتوقعة: {"status":"healthy"}
+# المخرجات المتوقعة: {"status":"ok","version":"1.0.0","environment":"dev"}
 ```
 
 ---
@@ -211,7 +211,7 @@ curl http://127.0.0.1:8000/health
 > 📘 **التوثيق الكامل:** راجع [manage_ar.md](manage_ar.md) للاطلاع على الدليل المرجعي الشامل بالعربية، أو [manage.md](manage.md) للنسخة الإنجليزية.
 
 ```bash
-# بذر القواعد التأسيسية (admin, *, *) و (user, users, read)
+# بذر القواعد التأسيسية (admin, *, *)
 uv run python manage.py seed-policies
 
 # إنشاء حساب مسؤول أول من الصفر (إدخال مخفي لكلمة المرور)
@@ -249,9 +249,11 @@ uv run python manage.py revoke auditor audit export
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `int` | `30` | لا | العمر الزمني لتوكن الوصول بالدقائق. |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `int` | `30` | لا | العمر الزمني لتوكن التحديث بالأيام. |
 | `LOG_TO_DB` | `bool` | `true` | لا | تفعيل أو تعطيل حفظ سجلات التدقيق في قاعدة البيانات. |
-| `LOG_TO_FILE` | `bool` | `true` | لا | تفعيل أو تعطيل كتابة سجلات التدقيق النصية إلى القرص بصيغة NDJSON. |
-| `AUDIT_LOG_FILE_PATH` | `str` | `logs/audit.log` | لا | مسار ملف حفظ سجلات التدقيق على نظام التشغيل. |
-| `CORS_ORIGINS` | `list[str]` | `["http://localhost:3000", ...]` | لا | نطاقات الـ CORS المصرح لها بالتواصل مع الخادم. النجمة `*` محظورة في الإنتاج. |
+| `LOG_TO_FILE` | `bool` | `true` | لا | تفعيل أو تعطيل كتابة سجلات التدقيق النصية إلى المصاب اليومية على القرص. |
+| `LOG_DIR` | `str` | `logs` | لا | مجلد حفظ سجلات التدقيق اليومية الدورية بصيغ (`.json`, `.txt`, `.md`). |
+| `ALLOWED_ORIGINS` | `list[str]` | `["http://localhost:3000", ...]` | لا | نطاقات الـ CORS المصرح لها بالتواصل مع الخادم. النجمة `*` محظورة في الإنتاج. |
+| `TRUST_PROXY_HEADERS` | `bool` | `false` | لا | الوثوق بترويسات البروكسي العكسي (`X-Forwarded-For`) لاستخراج عنوان العميل الحقيقي. |
+| `TRUSTED_PROXIES` | `list[str]` | `[]` | لا | قائمة عناوين IP أو كتل CIDR المعتمدة كبروكسيات وسيطة موثوقة. |
 
 > [!CAUTION]
 > عند ضبط `ENVIRONMENT=pro`، يرفض التطبيق الإقلاع فوراً إذا كانت المفاتيح السرية نصوصاً تجريبية أو إذا احتوت نطاقات CORS على الرمز الشامل `*`، وذلك لحماية البيئة الإنتاجية من الإعدادات الخاطئة.
@@ -300,7 +302,7 @@ fastapi-base-structure/
 │   │       ├── repo.py         # مستودع سجلات التدقيق المتخصص
 │   │       ├── router.py       # مسارات الاستعلام عن وتصدير السجلات
 │   │       ├── formatters.py   # منسقات التصدير (JSON, TXT, MARKDOWN)
-│   │       └── service.py      # خدمة التدقيق الأمني متعددة المصاب (قاعدة بيانات + ملف نصي)
+│   │       └── service.py      # خدمة التدقيق الأمني متعددة المصاب (قاعدة بيانات + مصاب ملفات)
 │   ├── security/               # محرك الأمان والتشفير والأذونات
 │   │   ├── authorization.py    # واجهة خدمة AuthorizationService الحاضنة لمحرك PyCasbin
 │   │   └── security.py         # تشفير كلمات المرور (Argon2id) وترميز JWT
@@ -308,9 +310,21 @@ fastapi-base-structure/
 │   └── share/                  # العناصر المشتركة (Enums, Response Envelopes, EventBus)
 │       ├── enum.py             # تعدادات الأدوار، الموارد، والعمليات
 │       ├── event_bus.py        # وسيط أحداث النطاق غير المتزامن في الذاكرة
+│       ├── limits.py           # الحدود المعمارية الصارمة وقيود حمولات البيانات
 │       └── responses.py        # أغلفة الاستجابة القياسية (SuccessResponse, PaginatedResponse, ErrorResponse)
-└── tests/                      # منظومة الاختبارات المؤتمتة (44 سيناريو فحص)
+└── tests/                      # منظومة الاختبارات المؤتمتة (64 سيناريو فحص)
     ├── conftest.py             # إعدادات وعملاء الاختبار غير المتزامنة مع SQLite في الذاكرة
+    ├── test_audit_logging.py   # اختبارات قياس وبث التدقيق الأمني وحجب البيانات
+    ├── test_auth_flow.py       # دورة حياة التسجيل، الدخول، التدوير والخروج
+    ├── test_casbin_authorization.py # اختبارات محرك الصلاحيات Casbin والرموز الشاملة
+    ├── test_health.py          # نقاط فحص الحياة والتشخيص التشغيلي
+    ├── test_input_hardening.py # فحص تحصين المدخلات وحجب تفاصيل الـ 422
+    ├── test_migrations.py      # فحص تسلسل الهجرات وعدم انحراف المخطط
+    ├── test_password_change.py # فحص تحديث security_version والإبطال الشامل للجلسات
+    ├── test_security.py        # تشفير Argon2id وآليات توكنات JWT
+    ├── test_security_invariants.py # عزل الجلسات وحصانة هجمات إعادة الاستخدام
+    ├── test_settings_and_context.py # فحص عناوين البروكسي وتحصين الإعدادات
+    ├── test_user_rbac.py       # استعراض المستخدمين وتصفح القوائم بالصفحات
     ├── README.md               # توثيق الاختبارات (English)
     └── README_AR.md            # توثيق الاختبارات (العربية)
 ```
@@ -319,11 +333,15 @@ fastapi-base-structure/
 
 ## 🧪 منظومة الاختبارات المؤتمتة
 
-يحافظ المشروع على **نسبة نجاح 100%** عبر 44 سيناريو فحص آلي تغطي كافة عقود الـ API، صمامات الأمان، والحالات الحدية بالاعتماد على قاعدة بيانات SQLite معزولة في الذاكرة:
+يحافظ المشروع على **نسبة نجاح 100%** عبر 64 سيناريو فحص آلي تغطي كافة عقود الـ API، صمامات الأمان، والحالات الحدية بالاعتماد على قاعدة بيانات SQLite معزولة في الذاكرة:
 
 ```bash
-# تشغيل كافة الاختبارات مع التفاصيل
+# تشغيل كافة الاختبارات بالوضع الموجز أو المفصل
+uv run pytest -q
 uv run pytest -v
+
+# تشغيل اختبارات الهجرات وتزامن المخطط
+uv run pytest tests/test_migrations.py -v
 
 # تشغيل اختبارات نظام الصلاحيات ومحرك Casbin
 uv run pytest tests/test_casbin_authorization.py -v
@@ -387,6 +405,13 @@ class ProductRepository(BaseRepository[Product]):
   uv run alembic upgrade head
   ```
 </details>
+
+---
+
+## ⚖️ ملاحظات معمارية وقيود تشغيلية معروفة (Architectural Notes & Limitations)
+
+* **مزامنة سياسات Casbin عبر عمال متعددين (Multi-Worker Sync):** يعمل محرك الصلاحيات Casbin مع التخزين المؤقت للسياسات في الذاكرة المحلية للعملية لضمان سرعة التقييم الفائقة. عند تعديل السياسات أو ربط الأدوار عبر أداة `manage.py` أثناء تشغيل الخادم، يتطلب ذلك إعادة تحميل السياسات أو إعادة تشغيل عمال ASGI في بيئات العمال المتعددين إلى حين دمج آلية مراقبة وتزامن موزعة (مثل Redis Pub/Sub).
+* **عدم قابلية تعديل سجلات التدقيق (Audit Log Immutability):** يتم فرض طبيعة الإضافة فقط (Append-Only) لسجلات التدقيق الأمني على مستوى طبقة التطبيق والمستودع (`AuditLogRepository`). في بيئات الإنتاج عالية الحساسية، يُنصح بضبط قيود الحماية التامة على مستوى محرك قاعدة البيانات (عبر مشغلات SQL مانعة للتعديل أو سحب صلاحيات `UPDATE`/`DELETE` للمستخدم الإنتاجي) مباشرة.
 
 ---
 

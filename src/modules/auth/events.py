@@ -12,6 +12,7 @@ __all__ = (
     'AuthInvalidPassword',
     'AuthLoggedIn',
     'AuthLoggedOut',
+    'AuthPasswordChanged',
     'AuthRefreshSessionExpired',
     'AuthRefreshSessionNotFound',
     'AuthRegistrationFailed',
@@ -172,7 +173,6 @@ class AuthAllSessionsRevoked(DomainEvent):
 
     user_id: int
     """Identifier of the user revoking all devices."""
-
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AuthPasswordChanged(DomainEvent):

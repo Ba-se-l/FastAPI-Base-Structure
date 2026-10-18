@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_session
 from src.exc import (
     AccessDeniedException,
+    PermissionDeniedException,
     InactiveEntityException,
     InvalidCredentialsException,
     TokenStaleException,
@@ -18,12 +19,10 @@ from src.exc import (
 from src.security import decode_access_token, AuthorizationService
 from src.settings import settings
 from src.share import Roles, Resource, Action
-
 from .repo import RefreshSessionRepository
 
 if TYPE_CHECKING:
     from src.modules.user import User
-
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +66,11 @@ async def get_current_user(
     if not user.is_active:
         raise InactiveEntityException(entity='User', identifier=str(user.id))
 
-    if payload.security_version != user.security_version:
+    if payload.sec_ver != user.security_version:
         raise TokenStaleException()
 
-    
+    # Fallback branch: _issue_token_pair always issues access tokens with a valid 'fid'.
+    # A token with fid=None can only arise from legacy sessions or synthetic test tokens.
     if payload.fid is not None:
         refresh_repo = RefreshSessionRepository(session=session)
         is_active = await refresh_repo.is_family_active(family_id=payload.fid, user_id=user.id)

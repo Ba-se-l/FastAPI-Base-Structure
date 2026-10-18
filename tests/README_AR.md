@@ -13,6 +13,13 @@
    - [`test_health.py`](#test_healthpy--نقاط-فحص-الجاهزية-والحياة)
    - [`test_auth_flow.py`](#test_auth_flowpy--دورة-حياة-المصادقة-والتوثيق)
    - [`test_user_rbac.py`](#test_user_rbacpy--نظام-الصلاحيات-rbac-والصفحات)
+   - [`test_audit_logging.py`](#test_audit_loggingpy--سجل-التدقيق-والتتبع-المحمول)
+   - [`test_migrations.py`](#test_migrationspy--هجرات-alembic-وتزامن-المخطط)
+   - [`test_input_hardening.py`](#test_input_hardeningpy--تحصين-المدخلات-وحجب-بيانات-422)
+   - [`test_settings_and_context.py`](#test_settings_and_contextpy--استخراج-عنوان-العميل-وتحصين-الإعدادات)
+   - [`test_password_change.py`](#test_password_changepy--تغيير-كلمة-المرور-وإبطال-الجلسات)
+   - [`test_casbin_authorization.py`](#test_casbin_authorizationpy--سياسات-صلاحيات-casbin-الدقيقة)
+   - [`test_security_invariants.py`](#test_security_invariantspy--صمامات-الأمان-المعمارية-وعزل-الجلسات)
 5. [دليل أوامر التشغيل عبر سطر الأوامر (CLI Guide)](#5-دليل-أوامر-التشغيل-عبر-سطر-الأوامر-cli-guide)
 6. [عقود ونماذج البيانات بالتفصيل (الحالات الإيجابية مقابل السلبية)](#6-عقود-ونماذج-البيانات-بالتفصيل-الحالات-الإيجابية-مقابل-السلبية)
 7. [المشاكل الشائعة وأفضل الممارسات الهندسية](#7-المشاكل-الشائعة-وأفضل-الممارسات-الهندسية)
@@ -30,13 +37,13 @@
 
 2. **انعدام استهلاك الشبكة بالكامل (`ASGITransport`):**
    * يتم توجيه ومعالجة كافة طلبات HTTP داخلياً عبر `httpx.AsyncClient` المدعوم بـ `ASGITransport(app=app)`.
-   * لا يتم فتح منافذ شبكية (TCP Sockets) أو تشغيل خوادم محلية، مما يمنح سرعة تنفيذ فائقة (كامل الحزمة تنتهي في نحو 3 ثوانٍ فقط).
+   * لا يتم فتح منافذ شبكية (TCP Sockets) أو تشغيل خوادم محلية، مما يمنح سرعة تنفيذ فائقة (كامل الحزمة التي تضم 64 اختباراً تنتهي في نحو 3 ثوانٍ فقط).
 
 3. **آلية استبدال التبعيات (Dependency Overrides):**
    * يتم استغلال ميزة `app.dependency_overrides` الخاصة بـ FastAPI لاستبدال جلسة قاعدة البيانات الإنتاجية `get_session` بجلسة الذاكرة المعزولة تلقائياً لكل طلب HTTP تجريه الاختبارات.
 
 4. **التوافق غير المتزامن 100% (Async Native Flow):**
-   * تُنفذ الاختبارات داخل حلقات أحداث `asyncio` حقيقية بنمط صارم عبر مكتبة `pytest-asyncio`.
+   * تُنفذ الاختبارات داخل حلقات أحداث `asyncio` حقيقية بنمط تلقائي (`asyncio_mode = "auto"`) عبر مكتبة `pytest-asyncio`.
 
 ---
 
@@ -51,7 +58,7 @@
 لتثبيت ومزامنة حزم الاختبارات بالكامل باستخدام مدير الحزم الحديث `uv`:
 
 ```bash
-uv sync --extra dev
+uv sync
 ```
 
 أو في حال إدارة الحزم يدوياً:
@@ -64,7 +71,7 @@ uv add --dev pytest pytest-asyncio
 
 ## 3. ملف الإعدادات والفيكستشرز المركزية (`conftest.py`)
 
-الملف: [`tests/conftest.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/conftest.py)
+الملف: [`tests/conftest.py`](conftest.py)
 
 يمثل هذا الملف العمود الفقري لحزمة الاختبارات؛ حيث يقوم بتهيئة محرك قاعدة البيانات بالذاكرة وإعداد الفيكستشرز (Fixtures) المشتركة:
 
@@ -90,12 +97,12 @@ uv add --dev pytest pytest-asyncio
 ## 4. التشريح الفني التفصيلي لملفات الاختبارات
 
 ### `test_security.py` — التشفير وتوكينز JWT
-الملف: [`tests/test_security.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/test_security.py)
+الملف: [`tests/test_security.py`](test_security.py)
 
 اختبارات وحدوية بحتة (Unit Tests) للتحقق من خوارزميات التشفير وتوليد وفك رموز JWT في وحدة `src/security`:
 
 * **`test_password_hashing_and_verification`**:
-  * يتحقق من أن `hash_password(raw)` تعيد تجزئة bcrypt مملحة تختلف تماماً عن النص الأصلي.
+  * يتحقق من أن `hash_password(raw)` تعيد تجزئة مشفرة بـ Argon2id تختلف تماماً عن النص الأصلي.
   * يتحقق من أن `verify_password` تعيد `True` لكلمة المرور الصحيحة و `False` لكلمة المرور الخاطئة.
 * **`test_access_token_creation_and_decoding`**:
   * يتحقق من أن `create_access_token(user_id)` تولد توكين JWT صالحاً يحمل الادعاءات: `sub`, `type=TokenType.ACCESS`, ووقت الانتهاء `exp`.
@@ -108,9 +115,9 @@ uv add --dev pytest pytest-asyncio
 ---
 
 ### `test_health.py` — نقاط فحص الجاهزية والحياة
-الملف: [`tests/test_health.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/test_health.py)
+الملف: [`tests/test_health.py`](test_health.py)
 
-اختبارات تكاملية لنقاط المراقبة والتشخيص في [main.py](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/main.py):
+اختبارات تكاملية لنقاط المراقبة والتشخيص في [main.py](../main.py):
 
 * **`test_health_endpoints`**:
   * **فحص الحياة (`GET /health`)**: يتأكد من استجابة الخادم بـ `200 OK` وجسم JSON يوضح حالة النظام والبيئة ورقم الإصدار.
@@ -119,7 +126,7 @@ uv add --dev pytest pytest-asyncio
 ---
 
 ### `test_auth_flow.py` — دورة حياة المصادقة والتوثيق
-الملف: [`tests/test_auth_flow.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/test_auth_flow.py)
+الملف: [`tests/test_auth_flow.py`](test_auth_flow.py)
 
 اختبار تكاملي شامل (End-to-End) ينفذ دورة حياة المستخدم الكاملة:
 
@@ -141,7 +148,7 @@ uv add --dev pytest pytest-asyncio
 ---
 
 ### `test_user_rbac.py` — نظام الصلاحيات (RBAC) والصفحات
-الملف: [`tests/test_user_rbac.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/test_user_rbac.py)
+الملف: [`tests/test_user_rbac.py`](test_user_rbac.py)
 
 اختبارات تكاملية للتحقق من جدران الحماية الأمنية وتوزيع الصلاحيات:
 
@@ -157,7 +164,7 @@ uv add --dev pytest pytest-asyncio
 ---
 
 ### `test_audit_logging.py` — سجل التدقيق والتتبع المحمول
-الملف: [`tests/test_audit_logging.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/test_audit_logging.py)
+الملف: [`tests/test_audit_logging.py`](test_audit_logging.py)
 
 اختبارات وحدوية وتكاملية لوحدة سجلات التدقيق والمراقبة المستقلة:
 
@@ -172,6 +179,67 @@ uv add --dev pytest pytest-asyncio
   * التحقق من حقن كائن `AuditContext` لعنوان الـ IP (ودعم `X-Forwarded-For`) ومعرف الطلب `request_id` والـ `User-Agent`.
   * التحقق الصارم من عدم تسريب كلمة المرور في بيانات السجل (`extra_data`) عند تسجيل المستخدمين الجدد.
   * التحقق من توثيق فروقات التعديل (`old` مقابل `new`) بدقة ومنع التكرار المزدوج لسجلات التخطي.
+
+---
+
+### `test_migrations.py` — هجرات Alembic وتزامن المخطط
+الملف: [`tests/test_migrations.py`](test_migrations.py)
+
+اختبارات التحقق من استقرار شجرة الهجرات التراكمية وانعدام انحراف المخطط:
+
+* **رأس هجرة وحيد مستقر**: التحقق البرمجي من أن تاريخ Alembic ينتهي برأس وحيد معتمد (`heads` تعيد حصراً `6aa8f9bfed61`).
+* **فحص تزامن المخطط (Schema Drift Check)**: التحقق من التطابق التام بين جداول قاعدة البيانات ونماذج SQLAlchemy `BaseModel.metadata` وانعدام أي عمليات DDL غير مدمجة (`alembic check`).
+
+---
+
+### `test_input_hardening.py` — تحصين المدخلات وحجب بيانات 422
+الملف: [`tests/test_input_hardening.py`](test_input_hardening.py)
+
+اختبارات تحصين حدود المدخلات وحجب البيانات الحساسة من أخطاء الـ 422:
+
+* **تطهير غلاف خطأ 422**: التأكد من تجريد كافة المدخلات الخام وسياقات التحقق (`ctx`, `input`) من تفاصيل استجابة الخطأ لمنع تسريب بيانات الاعتماد أو انعكاس الهجمات.
+* **فرض الحدود القصوى للحمولات**: التحقق من رفض الحمولات المتضخمة (مثل كلمات المرور فائقة الطول أو نصوص التدقيق غير المقيدة) وضبطها ضمن الثوابت المعمارية المحددة.
+
+---
+
+### `test_settings_and_context.py` — استخراج عنوان العميل وتحصين الإعدادات
+الملف: [`tests/test_settings_and_context.py`](test_settings_and_context.py)
+
+اختبارات صمامات أمان الإعدادات واستخراج عنوان العميل الحقيقي:
+
+* **استخراج عنوان العميل عبر البروكسي**: التحقق من دالة `resolve_client_ip` وأن ترويسة `X-Forwarded-For` لا تُعتمد إلا عند تفعيل `TRUST_PROXY_HEADERS=True` ومطابقة عنوان البروكسي المباشر لقائمة `TRUSTED_PROXIES` (سواء عناوين مفردة أو كتل CIDR).
+* **صمامات أمان بيئة الإنتاج**: التحقق من إيقاف تشغيل الخادم فوراً عند إقلاعه في وضع `ENVIRONMENT=pro` إذا كانت المفاتيح السرية نصوصاً تجريبية أو احتوت نطاقات CORS على الرمز الشامل `*`.
+
+---
+
+### `test_password_change.py` — تغيير كلمة المرور وإبطال الجلسات
+الملف: [`tests/test_password_change.py`](test_password_change.py)
+
+اختبارات دورة تعديل بيانات الاعتماد والإبطال الفوري للجلسات:
+
+* **تغيير كلمة المرور**: التحقق من صحة التحقق من كلمة المرور الحالية ومطابقة كلمة المرور الجديدة لمعايير القوة والتعقيد.
+* **الإبطال الشامل للجلسات (Global Revocation)**: التأكد من زيادة عداد `security_version` للمستخدم بشكل ذري، مما يبطل فوراً كافة توكنات الوصول السابقة وجلسات التحديث النشطة عبر جميع الأجهزة المتصلة.
+
+---
+
+### `test_casbin_authorization.py` — سياسات صلاحيات Casbin الدقيقة
+الملف: [`tests/test_casbin_authorization.py`](test_casbin_authorization.py)
+
+اختبارات محرك الصلاحيات الديناميكي PyCasbin وتقييم القواعد:
+
+* **تقييم القواعد والأذونات**: التحقق من مطابقة ثلاثيات الصلاحيات `(المستخدم/الدور, المورد, العملية)` ودعم الرموز الشاملة (`*`).
+* **وراثة الأدوار وتجاوز الصلاحيات**: اختبار توريث الأذونات وتعيين أذونات مباشرة للمستخدم دون الحاجة لاستعلامات قاعدة بيانات أثناء معالجة الطلب.
+
+---
+
+### `test_security_invariants.py` — صمامات الأمان المعمارية وعزل الجلسات
+الملف: [`tests/test_security_invariants.py`](test_security_invariants.py)
+
+اختبارات الثوابت الأمنية المعمارية وعزل الجلسات:
+
+* **عزل جلسات المستخدمين**: ضمان استحالة قيام مستخدم بتحديث أو إبطال أو سرقة جلسات مستخدم آخر.
+* **حصر عائلة التوكن (Family Scoping)**: التحقق من تقييد دالة `revoke_family` بمعرف المستخدم المالك حصراً (`user_id`).
+* **مقاومة هجمات التكرار والاستبدال**: التحقق من اكتشاف إعادة استخدام التوكنات الملغاة وإلغاء كامل عائلة الجلسة عند رصد الاختراق.
 
 ---
 
@@ -433,7 +501,7 @@ uv run pytest -k "rbac" -v
 
 ### تصادم تواقيع التوكينز (Token Collisions)
 * **المشكلة البرمجية:** عند توليد توكينز وصول لنفس المستخدم في نفس الثانية، فإن ادعاءات `sub`, `iat`, `exp` تكون متطابقة رياضياً بنسبة 100%، مما ينتج توكينز متطابقة تفشل اختبارات التدوير.
-* **الحل المعماري المعتمد:** تم تزويد كل توكين وصول بمعرّف فريد خاص `jti = uuid.uuid4().hex` داخل [TokenPayload](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/src/security/security.py) لضمان استحالة تشابه التوكينز.
+* **الحل المعماري المعتمد:** تم تزويد كل توكين وصول بمعرّف فريد خاص `jti = uuid.uuid4().hex` داخل [TokenPayload](../src/security/security.py) لضمان استحالة تشابه التوكينز.
 
 ### كيفية إضافة اختبار جديد للمشروع
 عند بناء مسارات جديدة في المشروع، اتبع هذا النمط المعياري البسيط:

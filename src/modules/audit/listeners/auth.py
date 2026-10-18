@@ -18,7 +18,7 @@ from src.modules.auth.events import (
     AuthTokenReplayDetected,
     AuthTokenRotated,
     AuthUserRegistered,
-    AuthPasswordChanged
+    AuthPasswordChanged,
 )
 
 from src.share.event_bus import AsyncEventBus
@@ -331,20 +331,20 @@ async def on_auth_all_sessions_revoked(
 
 async def on_auth_password_changed(
     event: AuthPasswordChanged,
-    session: AsyncSession | None = None
+    session: AsyncSession | None,
 ) -> None:
     """Records a successful password change inside the caller's transaction.
 
     Args:
-        event: The AuthPasswordChangeds fact.
-        session: Caller's active transaction for atomic persistence.    
+        event: The AuthPasswordChanged fact.
+        session: Caller's active transaction for atomic persistence.
     """
     await save_success_event(
         message=f"User [ID: {event.user_id} | Email: {event.email}] changed password successfully.",
         session=session,
         event_type=LogAction.AUTH_PASSWORD_CHANGED,
         user_id=str(event.user_id),
-        ctx=event.audit_ctx
+        ctx=event.audit_ctx,
     )
 
 

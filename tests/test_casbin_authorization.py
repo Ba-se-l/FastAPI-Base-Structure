@@ -1,8 +1,15 @@
+import argparse
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from manage import validate_action, validate_resource, validate_role_name
+from manage import (
+    handle_revoke,
+    handle_unassign_role,
+    validate_action,
+    validate_resource,
+    validate_role_name,
+)
 from src.modules.user import User, UserRepository
 from src.security import (
     AuthorizationNotInitializedError,
@@ -293,3 +300,20 @@ def test_cli_validation_rules():
 
     with pytest.raises(ValueError, match='Unknown action'):
         validate_action('hack')
+
+
+@pytest.mark.asyncio
+async def test_handle_revoke_and_unassign_validation():
+    """Verifies that handle_revoke and handle_unassign_role reject invalid role/resource/action."""
+    with pytest.raises(ValueError, match="Invalid role name"):
+        await handle_revoke(argparse.Namespace(role="Admin", resource="users", action="read", force=False))
+
+    with pytest.raises(ValueError, match="Unknown resource"):
+        await handle_revoke(argparse.Namespace(role="auditor", resource="invalid", action="read", force=False))
+
+    with pytest.raises(ValueError, match="Unknown action"):
+        await handle_revoke(argparse.Namespace(role="auditor", resource="users", action="invalid", force=False))
+
+    with pytest.raises(ValueError, match="Invalid role name"):
+        await handle_unassign_role(argparse.Namespace(user_id=1, role="Admin"))
+

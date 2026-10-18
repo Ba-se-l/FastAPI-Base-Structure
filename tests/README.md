@@ -13,6 +13,13 @@ This directory contains the comprehensive automated testing suite for the **Fast
    - [`test_health.py`](#test_healthpy--system-probes)
    - [`test_auth_flow.py`](#test_auth_flowpy--authentication-lifecycle)
    - [`test_user_rbac.py`](#test_user_rbacpy--rbac--pagination)
+   - [`test_audit_logging.py`](#test_audit_loggingpy--audit-trail--portable-logging)
+   - [`test_migrations.py`](#test_migrationspy--alembic-migrations--schema-synchronization)
+   - [`test_input_hardening.py`](#test_input_hardeningpy--input-hardening--validation-sanitization)
+   - [`test_settings_and_context.py`](#test_settings_and_contextpy--proxy-resolution--settings-hardening)
+   - [`test_password_change.py`](#test_password_changepy--password-change--session-invalidation)
+   - [`test_casbin_authorization.py`](#test_casbin_authorizationpy--granular-casbin-rbac-policies)
+   - [`test_security_invariants.py`](#test_security_invariantspy--security-invariants--session-isolation)
 5. [CLI Execution Guide](#5-cli-execution-guide)
 6. [Data Contracts & Payload Reference (Positive vs. Negative)](#6-data-contracts--payload-reference-positive-vs-negative)
 7. [Troubleshooting & Best Practices](#7-troubleshooting--best-practices)
@@ -30,13 +37,13 @@ The test suite is built on four core principles:
 
 2. **Zero Network Overhead (`ASGITransport`):**
    * All HTTP requests are executed in-process using `httpx.AsyncClient` with `ASGITransport(app=app)`.
-   * No actual TCP sockets or web servers are opened, resulting in sub-millisecond request cycles and ultra-fast execution (~3 seconds for the full suite).
+   * No actual TCP sockets or web servers are opened, resulting in sub-millisecond request cycles and ultra-fast execution (~3 seconds for the full suite of 64 tests).
 
 3. **Dependency Injection Overrides:**
    * FastAPI's `dependency_overrides` mechanism is leveraged to dynamically replace the production database session dependency `get_session` with an isolated test transaction generator.
 
 4. **100% Asynchronous Native Flow:**
-   * All test cases are executed within native `asyncio` event loops using `pytest-asyncio` in strict mode.
+   * All test cases are executed within native `asyncio` event loops using `pytest-asyncio` in auto mode (`asyncio_mode = "auto"`).
 
 ---
 
@@ -51,7 +58,7 @@ The test suite requires development dependencies:
 To sync and install all required testing dependencies using `uv`:
 
 ```bash
-uv sync --extra dev
+uv sync
 ```
 
 Alternatively, if managing packages manually:
@@ -64,7 +71,7 @@ uv add --dev pytest pytest-asyncio
 
 ## 3. Configuration & Global Fixtures (`conftest.py`)
 
-File: [`tests/conftest.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/conftest.py)
+File: [`tests/conftest.py`](conftest.py)
 
 This file sets up the async database engine and defines the core fixtures shared across all tests:
 
@@ -90,12 +97,12 @@ This file sets up the async database engine and defines the core fixtures shared
 ## 4. File-by-File Technical Deep Dive
 
 ### `test_security.py` — Cryptography & JWT Tokens
-File: [`tests/test_security.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/test_security.py)
+File: [`tests/test_security.py`](test_security.py)
 
 Pure unit tests verifying the cryptographic primitives and token encoding/decoding mechanics in `src/security`:
 
 * **`test_password_hashing_and_verification`**:
-  * Asserts that `hash_password(raw)` returns a salted bcrypt hash distinct from the plain text.
+  * Asserts that `hash_password(raw)` returns an Argon2id hash distinct from the plain text.
   * Asserts that `verify_password` returns `True` for the correct password and `False` for incorrect inputs.
 * **`test_access_token_creation_and_decoding`**:
   * Asserts that `create_access_token(user_id)` generates a valid JWT with claims: `sub`, `type=TokenType.ACCESS`, and expiration `exp`.
@@ -108,7 +115,7 @@ Pure unit tests verifying the cryptographic primitives and token encoding/decodi
 ---
 
 ### `test_health.py` — System Probes
-File: [`tests/test_health.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/test_health.py)
+File: [`tests/test_health.py`](test_health.py)
 
 Integration tests verifying operational monitoring endpoints in `main.py`:
 
@@ -119,7 +126,7 @@ Integration tests verifying operational monitoring endpoints in `main.py`:
 ---
 
 ### `test_auth_flow.py` — Authentication Lifecycle
-File: [`tests/test_auth_flow.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/test_auth_flow.py)
+File: [`tests/test_auth_flow.py`](test_auth_flow.py)
 
 Comprehensive end-to-end integration test executing the complete user authentication lifecycle:
 
@@ -141,7 +148,7 @@ Comprehensive end-to-end integration test executing the complete user authentica
 ---
 
 ### `test_user_rbac.py` — RBAC & Pagination
-File: [`tests/test_user_rbac.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/test_user_rbac.py)
+File: [`tests/test_user_rbac.py`](test_user_rbac.py)
 
 Integration tests verifying authorization boundaries and pagination:
 
@@ -157,7 +164,7 @@ Integration tests verifying authorization boundaries and pagination:
 ---
 
 ### `test_audit_logging.py` — Audit Trail & Portable Logging
-File: [`tests/test_audit_logging.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/tests/test_audit_logging.py)
+File: [`tests/test_audit_logging.py`](test_audit_logging.py)
 
 Integration and service-level unit tests for the portable audit logging module:
 
@@ -172,6 +179,67 @@ Integration and service-level unit tests for the portable audit logging module:
   * Verifies `AuditContext` correctly injects client IP (with `X-Forwarded-For`), User-Agent, and `request_id`.
   * Asserts user registration logs `USER_REGISTERED` with strictly sanitized payload (zero plain-text password leakage).
   * Asserts profile updates log `USER_UPDATED` with exact `old` vs `new` diff tracking and eliminates duplicate skip logs.
+
+---
+
+### `test_migrations.py` — Alembic Migrations & Schema Synchronization
+File: [`tests/test_migrations.py`](test_migrations.py)
+
+Tests ensuring database evolution stability, single lineage, and zero schema drift:
+
+* **Single Revision Head**: Verifies Alembic history has a single head (`heads` returns exactly one active head `6aa8f9bfed61`).
+* **Schema Drift Check**: Verifies that the physical database schema matches SQLAlchemy `BaseModel.metadata` with zero undetected DDL differences (`alembic check` clean).
+
+---
+
+### `test_input_hardening.py` — Input Hardening & Validation Sanitization
+File: [`tests/test_input_hardening.py`](test_input_hardening.py)
+
+Tests boundary sanitization and error payload safety:
+
+* **422 Error Envelope Sanitization**: Ensures raw user input and sensitive context (`ctx`, `input`) are stripped from 422 error response details to prevent reflection or credential leakage.
+* **Payload Bounds Enforcement**: Validates that extreme input sizes (excessively long passwords, oversized audit payloads) are rejected or safely bounded.
+
+---
+
+### `test_settings_and_context.py` — Proxy Resolution & Settings Hardening
+File: [`tests/test_settings_and_context.py`](test_settings_and_context.py)
+
+Tests security configuration invariants and client IP resolution:
+
+* **Client IP Proxy Resolution**: Verifies `resolve_client_ip` correctly evaluates `X-Forwarded-For` only when `TRUST_PROXY_HEADERS=True` and upstream peer IP matches configured `TRUSTED_PROXIES` (single IPs and CIDR ranges).
+* **Settings Production Guards**: Asserts that `ENVIRONMENT=pro` rejects placeholder secrets, wildcard CORS origins, and insecure configurations during startup.
+
+---
+
+### `test_password_change.py` — Password Change & Session Invalidation
+File: [`tests/test_password_change.py`](test_password_change.py)
+
+Tests credential modification flows and immediate session termination:
+
+* **Password Change Lifecycle**: Validates updating password with current verification and complexity rules.
+* **Global Session Revocation**: Asserts that changing password increments the user's `security_version`, immediately invalidating all pre-existing JWT access tokens and active refresh sessions across all devices.
+
+---
+
+### `test_casbin_authorization.py` — Granular Casbin RBAC Policies
+File: [`tests/test_casbin_authorization.py`](test_casbin_authorization.py)
+
+Tests declarative permission enforcement and dynamic RBAC evaluation:
+
+* **Policy Rule Evaluation**: Verifies exact `(subject, resource, action)` rules as well as wildcard permissions (`*`).
+* **Role Inheritance & Overrides**: Tests multi-role evaluation and user-specific permission overrides without database lookups during request handling.
+
+---
+
+### `test_security_invariants.py` — Security Invariants & Session Isolation
+File: [`tests/test_security_invariants.py`](test_security_invariants.py)
+
+Tests invariant safety properties and session boundary guarantees:
+
+* **User Session Isolation**: Verifies that user A cannot invalidate, refresh, or hijack refresh sessions belonging to user B.
+* **Family ID Scoping**: Ensures `revoke_family` strictly scopes token family invalidation to the owning `user_id`.
+* **Replay & Substitution Resistance**: Validates token reuse detection and invalid token family revocation.
 
 ---
 
@@ -286,14 +354,6 @@ uv run pytest -k "rbac" -v
       ]
     },
     "request_id": "201d8bc8badf49f2b89a1b796adeb897"
-  }
-  ```
-        "type": "value_error",
-        "loc": ["body", "password"],
-        "msg": "Value error, Password must contain at least one uppercase letter.",
-        "input": "simple"
-      }
-    ]
   }
   ```
 

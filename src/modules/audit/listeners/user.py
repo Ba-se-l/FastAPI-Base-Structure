@@ -148,6 +148,10 @@ async def on_user_deactivated(event: UserDeactivated, session: AsyncSession | No
     )
 
 
+
+
+
+
 def register_user_listeners(bus: AsyncEventBus) -> None:
     """Subscribes all user-related audit listeners to the event bus.
 

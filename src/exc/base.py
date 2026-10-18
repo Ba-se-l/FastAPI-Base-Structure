@@ -87,6 +87,25 @@ class AccessDeniedException(AppException):
         )
 
 
+class PermissionDeniedException(AppException):
+    """Raised when a user lacks permission to perform an action.
+
+    Produces HTTP ``403 Forbidden``.
+    """
+
+    def __init__(self, message: str = "Permission denied."):
+        """Initializes the permission-denied exception.
+
+        Args:
+            message: Custom denial message. Defaults to ``"Permission denied."``.
+        """
+        super().__init__(
+            message=message,
+            error_code="PERMISSION_DENIED",
+            status_code=403,
+        )
+
+
 class InactiveEntityException(AppException):
     """Raised when operating on a soft-deleted or deactivated entity.
 
@@ -143,10 +162,11 @@ class TokenStaleException(AppException):
 
     Produces HTTP ``401 Unauthorized``.
     """
+
     def __init__(self, message: str = "Session has been invalidated due to credential changes. Please log in again."):
         """Initializes the token-stale exception."""
         super().__init__(
             message=message,
             error_code="TOKEN_STALE",
-            status_code=401
+            status_code=401,
         )

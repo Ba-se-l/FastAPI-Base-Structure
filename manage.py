@@ -70,12 +70,19 @@ async def handle_seed_policies() -> None:
 async def handle_create_admin(args: argparse.Namespace) -> None:
     """Creates a new user account with administrator privileges."""
     password = args.password
-    if not password:
+    if password:
+        print(
+            "WARNING: Passing passwords via CLI arguments exposes credentials in process lists "
+            "and shell history. Prefer interactive prompt without --password.",
+            file=sys.stderr,
+        )
+    else:
         password = getpass.getpass("Enter admin password: ")
         confirm_password = getpass.getpass("Confirm admin password: ")
         if password != confirm_password:
             print("Error: Passwords do not match.", file=sys.stderr)
             sys.exit(1)
+
 
     try:
         validated = RegisterRequest(
@@ -145,6 +152,10 @@ async def handle_grant(args: argparse.Namespace) -> None:
 
 async def handle_revoke(args: argparse.Namespace) -> None:
     """Revokes a permission policy from a role."""
+    validate_role_name(args.role)
+    validate_resource(args.resource)
+    validate_action(args.action)
+
     if args.role == 'admin' and args.resource == '*' and args.action == '*' and not args.force:
         print(
             "Safety Warning: Revoking (admin, *, *) will lock out all administrators.\n"
@@ -152,6 +163,7 @@ async def handle_revoke(args: argparse.Namespace) -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+
 
     enforcer = await AuthorizationService.initialize(AsyncEngineLocal)
     removed = await enforcer.remove_policy(args.role, args.resource, args.action)
@@ -184,7 +196,9 @@ async def handle_assign_role(args: argparse.Namespace) -> None:
 
 async def handle_unassign_role(args: argparse.Namespace) -> None:
     """Removes a role assignment from a specific user identifier."""
+    validate_role_name(args.role)
     enforcer = await AuthorizationService.initialize(AsyncEngineLocal)
+
     subject = AuthorizationService.user_subject(args.user_id)
     removed = await enforcer.remove_grouping_policy(subject, args.role)
     if removed:

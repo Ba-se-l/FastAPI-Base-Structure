@@ -1,18 +1,25 @@
+from datetime import datetime, timezone
 import json
+from pathlib import Path
+import re
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.settings import settings
 from src.modules.audit import (
+    AuditLogRepository,
     ExportFormat,
     LogAction,
     LogSeverity,
+    drain_background_tasks,
     export_audit_logs,
     get_user_audit_logs,
+    log_event,
     save_failed_event,
     save_success_event,
 )
-from src.modules.audit.schemas import LogExportParams
+from src.modules.audit.schemas import LogEvent, LogExportParams
 from src.modules.user import User, UserRepository
 from src.security import create_access_token, hash_password
 from src.share import Roles
@@ -210,7 +217,7 @@ async def test_audit_context_and_sanitization(client: AsyncClient, db_session: A
     reg_resp = await client.post(
         "/api/v1/auth/register",
         json=reg_payload,
-        headers={"X-Forwarded-For": "198.51.100.42", "User-Agent": "TestClient/2.0"},
+        headers={"User-Agent": "TestClient/2.0"},
     )
     assert reg_resp.status_code == 201
     created_user_id = reg_resp.json()["id"]
@@ -224,7 +231,7 @@ async def test_audit_context_and_sanitization(client: AsyncClient, db_session: A
     # Crucial security check: password must NEVER be in extra_data!
     assert "password" not in reg_log.extra_data
     assert reg_log.extra_data.get("email") == "audit.sanitize@example.com"
-    assert reg_log.ip_address == "198.51.100.42"
+    assert reg_log.ip_address == "127.0.0.1"
     assert reg_log.user_agent == "TestClient/2.0"
 
     # 3. Update user and verify old vs new diff and NO duplicate skip log
@@ -251,3 +258,85 @@ async def test_audit_context_and_sanitization(client: AsyncClient, db_session: A
     assert "name" in update_logs[0].extra_data
     assert update_logs[0].extra_data["name"]["old"] == "Audit Sanitize User"
     assert update_logs[0].extra_data["name"]["new"] == "Audit Sanitize User Updated"
+
+
+@pytest.mark.asyncio
+async def test_audit_file_written_even_if_db_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, db_session: AsyncSession):
+    """Verifies that audit file appending succeeds reliably even when database persistence throws an exception."""
+    monkeypatch.setattr(settings, "log_to_file", True)
+    monkeypatch.setattr(settings, "log_to_db", True)
+    monkeypatch.setattr(settings, "log_dir", str(tmp_path))
+
+    async def mock_create(self, instance):
+        raise RuntimeError("Simulated DB Connection Crash")
+
+    monkeypatch.setattr(AuditLogRepository, "create", mock_create)
+
+    event = LogEvent(
+        event_type="DB_FAILURE_TEST",
+        severity=LogSeverity.ERROR,
+        message="This must be written to disk despite DB failure",
+        user_id="user_db_fail_1",
+    )
+
+    with pytest.raises(RuntimeError, match="Simulated DB Connection Crash"):
+        await log_event(event=event, session=db_session)
+
+    # Await background task drain
+    await drain_background_tasks()
+
+    # Verify file was written
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    json_file = tmp_path / f"{date_str}.json"
+    assert json_file.exists()
+    content = json_file.read_text(encoding="utf-8")
+    assert "This must be written to disk despite DB failure" in content
+
+
+@pytest.mark.asyncio
+async def test_drain_background_tasks_clears_pending_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Verifies that drain_background_tasks awaits all pending background writes."""
+    monkeypatch.setattr(settings, "log_to_file", True)
+    monkeypatch.setattr(settings, "log_to_db", False)
+    monkeypatch.setattr(settings, "log_dir", str(tmp_path))
+
+    event = LogEvent(event_type="DRAIN_TEST", message="Drain message")
+    await log_event(event=event)
+    await drain_background_tasks()
+    from src.modules.audit.service import _background_tasks
+    assert len(_background_tasks) == 0
+
+
+@pytest.mark.asyncio
+async def test_export_filename_sanitization(client: AsyncClient, db_session: AsyncSession):
+    """Verifies that export filenames are sanitized against path traversal and CRLF headers."""
+    admin_pass = "AdminP@ssw0rd!1"
+    admin_payload = {"name": "Admin Export", "email": "admin.export@enterprise.io", "password": admin_pass}
+    await client.post("/api/v1/auth/register", json=admin_payload)
+
+    user_repo = UserRepository(session=db_session)
+    admin_user = await user_repo.get_by_email("admin.export@enterprise.io")
+    await user_repo.update(instance=admin_user, update_dict={"role": Roles.ADMIN})
+    await db_session.commit()
+
+    login_resp = await client.post("/api/v1/auth/login", json={"email": admin_payload["email"], "password": admin_pass})
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    malicious_uid = 'a"b; c\r\nد'
+    resp = await client.get(
+        "/api/v1/audit/export",
+        params={"user_id": malicious_uid, "format": "json"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    cd = resp.headers.get("Content-Disposition", "")
+    assert cd is not None
+    assert "\r" not in cd
+    assert "\n" not in cd
+
+    match = re.search(r'filename="([^"]+)"', cd)
+    assert match is not None
+    filename = match.group(1)
+    assert re.match(r'^[A-Za-z0-9_.-]+$', filename) is not None
+

@@ -48,7 +48,7 @@ from .events import (
 )
 from .model import RefreshSession
 from .repo import RefreshSessionRepository
-from .schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, ChangePasswordRequest
+from .schemas import ChangePasswordRequest, LoginRequest, RefreshRequest, RegisterRequest, TokenResponse
 
 
 async def _issue_token_pair(
@@ -72,7 +72,6 @@ async def _issue_token_pair(
     Returns:
         A TokenResponse containing both tokens.
     """
-
     if family_id is None:
         family_id = uuid.uuid4().hex
 
@@ -248,10 +247,10 @@ async def login_user(
         )
         raise InvalidCredentialsException()
 
+
     if new_hash is not None:
         user.hashed_password = new_hash
         await session.flush()
-
 
     # Step 3: Verify the account is active
     if not user.is_active:
@@ -299,18 +298,24 @@ async def logout(
     """
     payload = decode_refresh_token(token=refresh_token_str)
     jti = payload.jti
+    token_user_id = int(payload.sub)
 
     refresh_repo = RefreshSessionRepository(session=session)
     existing_session = await refresh_repo.get_by_jti(jti=jti)
     if existing_session is not None:
-        await refresh_repo.revoke_family(family_id=existing_session.family_id)
+        if existing_session.user_id != token_user_id:
+            raise InvalidCredentialsException()
+        await refresh_repo.revoke_family(
+            family_id=existing_session.family_id,
+            user_id=existing_session.user_id,
+        )
     else:
         await refresh_repo.revoke_by_jti(jti=jti)
 
     await event_bus.publish(
         event=AuthLoggedOut(
             audit_ctx=audit_ctx,
-            user_id=int(payload.sub),
+            user_id=token_user_id,
         ),
         session=session,
     )
@@ -426,6 +431,9 @@ async def refresh_token(
         )
         raise TokenRevokedException()
 
+    if existing_session.user_id != user_id:
+        raise TokenRevokedException()
+
     expires_at = existing_session.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
@@ -444,8 +452,11 @@ async def refresh_token(
     revoked = await refresh_repo.revoke_if_active(jti=jti)
     if not revoked:
         # Session was already revoked concurrently or reused — potential token theft!
-        # Targeted Family Revocation (Smart Device Isolation)
-        await refresh_repo.revoke_family(family_id=existing_session.family_id)
+        # Targeted Family Revocation (Smart Device Isolation) strictly scoped to user
+        await refresh_repo.revoke_family(
+            family_id=existing_session.family_id,
+            user_id=existing_session.user_id,
+        )
         await event_bus.publish(
             event=AuthTokenReplayDetected(
                 audit_ctx=audit_ctx,
@@ -454,8 +465,8 @@ async def refresh_token(
             ),
             session=session,
         )
-        # CRITICAL FIX: Commit immediately before raising exception
-        # to prevent get_session() from rolling back our security revocation!
+        # G1 GUARDRAIL: Commit immediately before raising exception
+        # to persist family revocation before get_session() triggers rollback!
         await session.commit()
         raise TokenRevokedException()
 
@@ -481,9 +492,9 @@ async def refresh_token(
 
 async def change_password(
     user: User,
-    request: ChangePasswordRequest,
+    schema: ChangePasswordRequest,
     session: AsyncSession,
-    audit_ctx: AuditContext | None = None
+    audit_ctx: AuditContext | None = None,
 ) -> bool:
     """Updates user password, increments security version, and revokes all refresh sessions.
 
@@ -502,12 +513,12 @@ async def change_password(
     session_repo = RefreshSessionRepository(session=session)
 
     # Step 1: Verify old password
-    is_password_valid = verify_password(password=request.old_password, hashed_password=user.hashed_password)
+    is_password_valid = verify_password(password=schema.old_password, hashed_password=user.hashed_password)
     if not is_password_valid:
         raise InvalidCredentialsException()
 
     # Step 2: Hash and set new password, increment security version
-    user.hashed_password = hash_password(request.new_password)
+    user.hashed_password = hash_password(schema.new_password)
     user.security_version += 1
     await session.flush()
 

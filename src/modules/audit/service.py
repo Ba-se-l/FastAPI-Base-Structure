@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 import logging
 from pathlib import Path
+import re
 from typing import Any
 
 from fastapi.encoders import jsonable_encoder
@@ -17,6 +18,26 @@ from .repo import AuditLogRepository
 from .schemas import LogEvent, LogExportParams, LogQueryFilter, LogResponse
 
 logger = logging.getLogger(__name__)
+
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
+def _schedule_file_write(response: LogResponse) -> None:
+    """Schedules a non-blocking file append while holding a strong task reference."""
+    task = asyncio.create_task(asyncio.to_thread(_append_to_file_sync, settings.log_dir, response))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+async def drain_background_tasks(timeout: float = 5.0) -> None:
+    """Awaits pending audit file writes during shutdown, logging any that time out."""
+    if not _background_tasks:
+        return
+    tasks = list(_background_tasks)
+    try:
+        await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=timeout)
+    except TimeoutError:
+        logger.warning("Timed out draining audit background file tasks (%d pending)", len(_background_tasks))
 
 
 def _append_to_file_sync(log_dir: str, log_resp: LogResponse) -> None:
@@ -89,30 +110,28 @@ async def log_event(
         extra_data=sanitized_extra_data,
     )
 
-    if settings.log_to_db:
-        if session is not None:
-            repo = AuditLogRepository(session=session)
-            audit_instance = await repo.create(audit_instance)
-            await session.flush()
-        else:
-            async with AsyncSessionLocal() as audit_session:
-                repo = AuditLogRepository(session=audit_session)
-                audit_instance = await repo.create(audit_instance)
-                await audit_session.commit()
-                await audit_session.refresh(audit_instance)
-
     if audit_instance.created_at is None:
         audit_instance.created_at = datetime.now(timezone.utc)
 
-    response = LogResponse.model_validate(audit_instance)
+    try:
+        if settings.log_to_db:
+            if session is not None:
+                repo = AuditLogRepository(session=session)
+                audit_instance = await repo.create(audit_instance)
+                await session.flush()
+            else:
+                async with AsyncSessionLocal() as audit_session:
+                    repo = AuditLogRepository(session=audit_session)
+                    audit_instance = await repo.create(audit_instance)
+                    await audit_session.commit()
+                    await audit_session.refresh(audit_instance)
+    finally:
+        if settings.log_to_file and settings.log_dir:
+            response = LogResponse.model_validate(audit_instance)
+            _schedule_file_write(response)
 
-    # 2. Asynchronous non-blocking file output
-    if settings.log_to_file:
-        asyncio.create_task(
-            asyncio.to_thread(_append_to_file_sync, settings.log_dir, response)
-        )
+    return LogResponse.model_validate(audit_instance)
 
-    return response
 
 
 async def save_success_event(
@@ -228,7 +247,11 @@ async def export_audit_logs(
     content = formatter.format_batch(responses)
 
     # Resolve filename & content type
-    target_tag = f"user_{params.user_id}" if params.user_id else 'audit'
+    if params.user_id:
+        sanitized_uid = re.sub(r'[^A-Za-z0-9_-]', '_', str(params.user_id))[:64]
+        target_tag = f"user_{sanitized_uid}"
+    else:
+        target_tag = 'audit'
     now_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
     filename = f"{target_tag}_{now_str}.{params.format.value}"
 

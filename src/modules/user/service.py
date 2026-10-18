@@ -2,7 +2,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.exc import AccessDeniedException
 from src.security import AuthorizationService
-from src.share import Action, AuditContext, Roles, Resource, UserAction, get_extra_dict_for_updates, event_bus
+from src.share import (
+    Action,
+    AuditContext,
+    Resource,
+    Roles,
+    UserAction,
+    event_bus,
+    get_extra_dict_for_updates,
+)
 
 from .events import (
     UserAccessDenied,
@@ -18,16 +26,23 @@ from .repo import UserRepository
 from .schemas import UserUpdate
 
 
-
 def _has_permission(actor: User, resource: Resource, action: Action) -> bool:
+    """Evaluates a Casbin permission for an actor using primitive identity fields.
 
+    Args:
+        actor: Authenticated User ORM instance.
+        resource: Target Resource enum.
+        action: Requested Action enum.
+
+    Returns:
+        True if the permission is granted; False otherwise.
+    """
     return AuthorizationService.is_allowed(
         user_id=actor.id,
         role=actor.role.value,
         resource=resource.value,
-        action=action.value
+        action=action.value,
     )
-
 
 
 async def _get_user_by_id(

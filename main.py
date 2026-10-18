@@ -1,6 +1,8 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import asynccontextmanager
+from typing import Any
 import logging
+import re
 import uuid
 
 from fastapi import FastAPI, Request
@@ -15,8 +17,9 @@ from src.database import AsyncEngineLocal, check_database_connection
 from src.exc import AppException
 from src.modules import api_router
 from src.settings import settings
-from src.share import ErrorDetail, ErrorResponse, _HTTP_ERROR_CODE_MAP
+from src.share import AUDIT_REQUEST_ID_MAX, ErrorDetail, ErrorResponse, _HTTP_ERROR_CODE_MAP
 from src.share.event_bus import event_bus
+from src.modules.audit import drain_background_tasks
 from src.modules.audit.listeners import register_audit_listeners
 from src.security import AuthorizationService
 
@@ -42,17 +45,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     logger.info('Verifying database connectivity...')
     await check_database_connection()
-
     logger.info('Loading authorization policies into memory...')
     await AuthorizationService.initialize(AsyncEngineLocal)
-
     logger.info('Application startup complete.')
 
-    yield
+    try:
+        yield
+    finally:
+        logger.info('Draining background audit tasks...')
+        await drain_background_tasks()
+        logger.info('Disposing database engine connection pool...')
+        await AsyncEngineLocal.dispose()
+        logger.info('Application shutdown complete.')
 
-    logger.info('Disposing database engine connection pool...')
-    await AsyncEngineLocal.dispose()
-    logger.info('Application shutdown complete.')
 
 
 app = FastAPI(
@@ -72,15 +77,20 @@ app.add_middleware(
 )
 
 
+_REQUEST_ID_PATTERN = re.compile(rf'^[A-Za-z0-9._-]{{1,{AUDIT_REQUEST_ID_MAX}}}$')
+
+
 @app.middleware('http')
 async def request_context_middleware(request: Request, call_next):
     """Generates and propagates unique X-Request-ID for request tracing."""
-    request_id = request.headers.get('X-Request-ID') or uuid.uuid4().hex
+    incoming = request.headers.get('X-Request-ID', '')
+    request_id = incoming if _REQUEST_ID_PATTERN.fullmatch(incoming) else uuid.uuid4().hex
     request.state.request_id = request_id
 
     response = await call_next(request)
     response.headers['X-Request-ID'] = request_id
     return response
+
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -158,6 +168,25 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
     )
 
 
+def _safe_validation_errors(errors: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Projects validation errors without `input` or `ctx` to prevent echoing secrets.
+
+    Args:
+        errors: Raw errors from RequestValidationError.errors().
+
+    Returns:
+        A list of dicts containing only loc, msg, and type.
+    """
+    return [
+        {
+            'loc': [str(part) for part in err.get('loc', ())],
+            'msg': str(err.get('msg', '')),
+            'type': str(err.get('type', '')),
+        }
+        for err in errors
+    ]
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Global handler for schema validation errors.
@@ -165,7 +194,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     Wraps FastAPI/Pydantic validation failures in unified ErrorResponse envelope.
     """
     request_id = getattr(request.state, 'request_id', None)
-    sanitized_errors = jsonable_encoder(exc.errors(), custom_encoder={Exception: str})
+    sanitized_errors = _safe_validation_errors(exc.errors())
     logger.warning(
         'RequestValidationError on %s %s (request_id=%s): %s',
         request.method,
@@ -186,6 +215,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         content=payload.model_dump(),
     )
+
 
 
 @app.exception_handler(Exception)

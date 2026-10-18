@@ -2,17 +2,29 @@ from typing import Literal
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
-def normalize_seq(seq: str, to: Literal['none','lower','upper'] = 'none') -> str:
-    if to == 'none': return seq.strip()
-    if to == 'lower': return seq.strip().lower()
-    if to == 'upper': return seq.strip().upper()
+PASSWORD_MAX_LENGTH = 100
+"""Single upper bound for every plaintext password field (bounds Argon2 CPU cost)."""
 
 
-def validate_password(password: str) -> str:
+def normalize_seq(seq: object, to: Literal['none', 'lower', 'upper'] = 'none') -> object:
+    """Strips and case-folds strings; returns non-strings unchanged for Pydantic to reject with 422."""
+    if not isinstance(seq, str):
+        return seq
+    stripped = seq.strip()
+    match to:
+        case 'lower':
+            return stripped.lower()
+        case 'upper':
+            return stripped.upper()
+        case _:
+            return stripped
+
+
+def validate_pass(pwd: str) -> str:
     """Validates that password meets enterprise security standards.
-    
+
     Args:
-        password: Raw password string.
+        v: Raw password string.
 
     Returns:
         Validated password string.
@@ -20,16 +32,16 @@ def validate_password(password: str) -> str:
     Raises:
         ValueError: If password lacks required character classes.
     """
-    if not any(c.isupper() for c in password):
+    if not any(c.isupper() for c in pwd):
         raise ValueError("Password must contain at least one uppercase letter.")
-    if not any(c.islower() for c in password):
+    if not any(c.islower() for c in pwd):
         raise ValueError("Password must contain at least one lowercase letter.")
-    if not any(c.isdigit() for c in password):
+    if not any(c.isdigit() for c in pwd):
         raise ValueError("Password must contain at least one digit.")
     special_chars = set("!@#$%^&*()_+-=[]{}|;':\",./<>?`~")
-    if not any(c in special_chars for c in password):
+    if not any(c in special_chars for c in pwd):
         raise ValueError("Password must contain at least one special character.")
-    return password
+    return pwd
 
 
 class RegisterRequest(BaseModel):
@@ -41,26 +53,27 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     """The user's email address. Must be unique across the system."""
 
-    password: str = Field(..., min_length=8, max_length=100)
+    password: str = Field(..., min_length=8, max_length=PASSWORD_MAX_LENGTH)
     """The user's plain-text password. Will be hashed before storage."""
 
     @field_validator('email', mode='before')
     @classmethod
-    def normalize_email(cls, v: str) -> str:
+    def normalize_email(cls, v: object) -> object:
         """Normalizes email to lowercase and strips whitespace.
 
         Args:
-            v: The raw email string from the request.
+            v: The raw email value from the request.
 
         Returns:
-            Lowercase, stripped email string.
+            Lowercase, stripped email string if string, or original object.
         """
         return normalize_seq(v, 'lower')
 
     @field_validator('password')
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
-        return validate_password(password=v)
+        """Validates that password meets enterprise security standards."""
+        return validate_pass(v)
 
 
 class LoginRequest(BaseModel):
@@ -69,19 +82,19 @@ class LoginRequest(BaseModel):
     email: EmailStr
     """The user's registered email address."""
 
-    password: str = Field(...)
+    password: str = Field(..., max_length=PASSWORD_MAX_LENGTH)
     """The user's plain-text password for verification."""
 
     @field_validator('email', mode='before')
     @classmethod
-    def normalize_email(cls, v: str) -> str:
+    def normalize_email(cls, v: object) -> object:
         """Normalizes email to lowercase and strips whitespace.
 
         Args:
-            v: The raw email string from the request.
+            v: The raw email value from the request.
 
         Returns:
-            Lowercase, stripped email string.
+            Lowercase, stripped email string if string, or original object.
         """
         return normalize_seq(v, 'lower')
 
@@ -106,22 +119,20 @@ class RefreshRequest(BaseModel):
     """The current valid refresh token to exchange for new tokens."""
 
 
-
 class ChangePasswordRequest(BaseModel):
     """Schema for authenticated user password change request."""
 
-    old_password: str = Field(..., min_length=1, max_length=100)
+    old_password: str = Field(..., min_length=1, max_length=PASSWORD_MAX_LENGTH)
     """The user's current plain-text password for verification."""
 
-    new_password: str = Field(..., min_length=8, max_length=100)
+    new_password: str = Field(..., min_length=8, max_length=PASSWORD_MAX_LENGTH)
     """The desired new plain-text password."""
 
     @field_validator('new_password')
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
         """Validates that new password meets enterprise security standards."""
-        return validate_password(password=v)
-
+        return validate_pass(v)
 
     @model_validator(mode='after')
     def verify_different_passwords(self) -> 'ChangePasswordRequest':

@@ -1,8 +1,14 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.share import (
+    AUDIT_IP_MAX,
+    AUDIT_REQUEST_ID_MAX,
+    AUDIT_USER_AGENT_MAX,
+    AUDIT_USER_ID_MAX,
+)
 from .enum import ExportFormat, LogSeverity
 
 
@@ -32,6 +38,39 @@ class LogEvent(BaseModel):
 
     extra_data: dict[str, Any] | None = None
     """Structured arbitrary metadata dictionary."""
+
+    @field_validator('user_id', mode='before')
+    @classmethod
+    def truncate_user_id(cls, v: Any) -> str | None:
+        """Truncates user_id to AUDIT_USER_ID_MAX to prevent DB column overflow."""
+        if v is None:
+            return None
+        return str(v)[:AUDIT_USER_ID_MAX]
+
+    @field_validator('request_id', mode='before')
+    @classmethod
+    def truncate_request_id(cls, v: Any) -> str | None:
+        """Truncates request_id to AUDIT_REQUEST_ID_MAX to prevent DB column overflow."""
+        if v is None:
+            return None
+        return str(v)[:AUDIT_REQUEST_ID_MAX]
+
+    @field_validator('ip_address', mode='before')
+    @classmethod
+    def truncate_ip_address(cls, v: Any) -> str | None:
+        """Truncates ip_address to AUDIT_IP_MAX to prevent DB column overflow."""
+        if v is None:
+            return None
+        return str(v)[:AUDIT_IP_MAX]
+
+    @field_validator('user_agent', mode='before')
+    @classmethod
+    def truncate_user_agent(cls, v: Any) -> str | None:
+        """Truncates user_agent to AUDIT_USER_AGENT_MAX to prevent DB column overflow."""
+        if v is None:
+            return None
+        return str(v)[:AUDIT_USER_AGENT_MAX]
+
 
 
 class LogResponse(BaseModel):

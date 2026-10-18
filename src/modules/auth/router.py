@@ -6,7 +6,7 @@ from src.database import get_session
 from src.modules.user import User, UserResponse
 from src.share import MessageResponse, AuditContext, get_audit_context
 from .dependencies import get_current_user
-from .schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, ChangePasswordRequest
+from .schemas import ChangePasswordRequest, LoginRequest, RefreshRequest, RegisterRequest, TokenResponse
 from . import service
 
 router = APIRouter(prefix=f"{settings.api_prefix}/auth", tags=["Authentication"])
@@ -101,20 +101,20 @@ async def logout_all_endpoint(
     "/change-password",
     response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
-    summary="Change account password.",
-    description="Update user password, increments security version, and revokes all active sessions."
+    summary="Change account password",
+    description="Updates user password, increments security version, and revokes all active sessions.",
 )
-async def change_password_endpo8int(
+async def change_password_endpoint(
     request: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-    audit_ctx: AuditContext = Depends(get_audit_context)
+    audit_ctx: AuditContext = Depends(get_audit_context),
 ) -> MessageResponse:
     """Updates user credentials and invalidates all existing sessions."""
     await service.change_password(
         user=current_user,
-        request=request,
+        schema=request,
         session=session,
-        audit_ctx=audit_ctx
+        audit_ctx=audit_ctx,
     )
     return MessageResponse(message="Password changed successfully. All active sessions have been terminated.")

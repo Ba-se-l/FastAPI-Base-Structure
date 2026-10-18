@@ -11,7 +11,7 @@
     <a href="https://casbin.org/"><img src="https://img.shields.io/badge/PyCasbin-RBAC_Engine-0052CC.svg?style=flat" alt="PyCasbin RBAC"></a>
     <a href="https://docs.astral.sh/uv/"><img src="https://img.shields.io/badge/Toolchain-uv-DE5FE9.svg?style=flat" alt="uv Package Manager"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat" alt="MIT License"></a>
-    <img src="https://img.shields.io/badge/Tests-40%2F40_Passing-brightgreen.svg?style=flat" alt="40/40 Tests Passing">
+    <img src="https://img.shields.io/badge/Tests-64%2F64_Passing-brightgreen.svg?style=flat" alt="64/64 Tests Passing">
   </p>
 
   <p>
@@ -62,7 +62,7 @@ flowchart TD
         Service --> EventBus["EventBus (In-Memory Async Dispatcher)"]
         EventBus --> AuditHandler["Audit Event Consumer"]
         AuditHandler --> SinkDB[("Database Sink (audit_logs)")]
-        AuditHandler --> SinkFile["File Sink (logs/audit.log NDJSON)"]
+        AuditHandler --> SinkFile["File Sink (logs/ Daily Multi-Format)"]
     end
 
     subgraph OOB ["Out-of-Band Administration"]
@@ -126,7 +126,7 @@ This repository provides an enterprise-hardened blueprint designed to eliminate 
 | **Schema Migrations** | [Alembic](https://alembic.sqlalchemy.org/) | `>= 1.19.1` | Asynchronous migration pipeline with automated constraint naming |
 | **Policy Engine** | [PyCasbin](https://casbin.org/) | `>= 1.43.0` | In-memory dynamic RBAC/ABAC authorization engine |
 | **Cryptography** | [pwdlib[argon2]](https://github.com/frankie567/pwdlib) / [PyJWT](https://pyjwt.readthedocs.io/) | `>= 0.3.1` / `>= 2.13.0` | Argon2id password hashing and HS256 JWT encoding/decoding |
-| **Testing** | [pytest](https://pytest.org/) / [httpx](https://www.python-httpx.org/) | `>= 9.1` / `>= 0.28` | Async integration test suite running 40 automated test scenarios |
+| **Testing** | [pytest](https://pytest.org/) / [httpx](https://www.python-httpx.org/) | `>= 9.1` / `>= 0.28` | Async integration test suite running 64 automated test scenarios |
 
 ---
 
@@ -175,7 +175,7 @@ uv run uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ### 6. Verify Health
 ```bash
 curl http://127.0.0.1:8000/health
-# Output: {"status":"healthy"}
+# Output: {"status":"ok","version":"1.0.0","environment":"dev"}
 ```
 
 ---
@@ -211,7 +211,7 @@ The repository includes a dedicated out-of-band CLI tool to manage policies and 
 > 📘 **Full Documentation:** See [manage.md](manage.md) for the complete English reference manual, or [manage_ar.md](manage_ar.md) for Arabic.
 
 ```bash
-# Seed default authorization rules (admin, *, *) and (user, users, read)
+# Seed default authorization rules (admin, *, *)
 uv run python manage.py seed-policies
 
 # Create initial root administrator (prompts for password securely)
@@ -249,9 +249,11 @@ Settings are managed via `pydantic-settings` with automatic type casting, enviro
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `int` | `30` | No | Lifetime duration of access tokens in minutes. |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `int` | `30` | No | Lifetime duration of refresh tokens in days. |
 | `LOG_TO_DB` | `bool` | `true` | No | Enable or disable persisting audit events to the database. |
-| `LOG_TO_FILE` | `bool` | `true` | No | Enable or disable appending structured NDJSON events to `logs/audit.log`. |
-| `AUDIT_LOG_FILE_PATH` | `str` | `logs/audit.log` | No | Target filesystem location for file-based audit records. |
-| `CORS_ORIGINS` | `list[str]` | `["http://localhost:3000", ...]` | No | Permitted CORS origins. Wildcard `*` is strictly blocked when `ENVIRONMENT=pro`. |
+| `LOG_TO_FILE` | `bool` | `true` | No | Enable or disable writing structured audit logs to daily disk sinks. |
+| `LOG_DIR` | `str` | `logs` | No | Destination directory for daily audit log rotation (`.json`, `.txt`, `.md`). |
+| `ALLOWED_ORIGINS` | `list[str]` | `["http://localhost:3000", ...]` | No | Permitted CORS origins. Wildcard `*` is strictly blocked when `ENVIRONMENT=pro`. |
+| `TRUST_PROXY_HEADERS` | `bool` | `false` | No | Trust reverse proxy headers (`X-Forwarded-For`) for client IP resolution. |
+| `TRUSTED_PROXIES` | `list[str]` | `[]` | No | Explicit IP addresses or CIDR blocks authorized as trusted upstream proxies. |
 
 > [!CAUTION]
 > When `ENVIRONMENT=pro`, the application validates that secret keys are not set to placeholder strings and that CORS origins do not contain wildcards (`*`). Failure triggers an immediate startup crash to prevent accidental insecure deployments.
@@ -300,7 +302,7 @@ fastapi-base-structure/
 │   │       ├── repo.py         # AuditLogRepository specialist
 │   │       ├── router.py       # Audit query and export endpoints
 │   │       ├── formatters.py   # Multi-format export formatters (JSON, TXT, MARKDOWN)
-│   │       └── service.py      # Multi-sink audit logger maestro (DB + NDJSON File)
+│   │       └── service.py      # Multi-sink audit logger maestro (DB + File Sinks)
 │   ├── security/               # Cryptography & dynamic authorization engine
 │   │   ├── authorization.py    # AuthorizationService facade wrapping PyCasbin AsyncEnforcer
 │   │   └── security.py         # Password hashing (Argon2id) & JWT token encoders
@@ -308,9 +310,21 @@ fastapi-base-structure/
 │   └── share/                  # Shared primitives (Enums, Response Envelopes, EventBus)
 │       ├── enum.py             # Roles, Resource, Action, Severity enums
 │       ├── event_bus.py        # In-memory asynchronous domain event dispatcher
+│       ├── limits.py           # Hard architectural boundary limits & payload bounds
 │       └── responses.py        # Standardized SuccessResponse, PaginatedResponse, ErrorResponse
-└── tests/                      # Automated test suite (44 test scenarios)
+└── tests/                      # Automated test suite (64 test scenarios)
     ├── conftest.py             # Isolated async SQLite fixtures & HTTP test clients
+    ├── test_audit_logging.py   # Multi-sink audit telemetry & sanitization tests
+    ├── test_auth_flow.py       # Registration, login, rotation & logout lifecycle
+    ├── test_casbin_authorization.py # Granular PyCasbin RBAC & wildcard evaluation
+    ├── test_health.py          # Liveness and readiness diagnostic probes
+    ├── test_input_hardening.py # Validation error sanitization & payload bounds
+    ├── test_migrations.py      # Alembic migration linearity & schema drift check
+    ├── test_password_change.py # Security version bumping & global session revocation
+    ├── test_security.py        # Argon2id cryptography & JWT token mechanics
+    ├── test_security_invariants.py # Session isolation & CSRF/replay invariance
+    ├── test_settings_and_context.py # Proxy resolution CIDR & settings hardening
+    ├── test_user_rbac.py       # User profile access & paginated user queries
     ├── README.md               # Test documentation (English)
     └── README_AR.md            # Test documentation (Arabic)
 ```
@@ -319,11 +333,15 @@ fastapi-base-structure/
 
 ## 🧪 Automated Testing
 
-The project maintains **100% test pass rate** with 44 automated test scenarios covering the full API contract, security boundaries, and edge cases against an isolated in-memory SQLite database:
+The project maintains **100% test pass rate** with 64 automated test scenarios covering the full API contract, security boundaries, and edge cases against an isolated in-memory SQLite database:
 
 ```bash
-# Run all tests with verbose output
+# Run all tests with concise or verbose output
+uv run pytest -q
 uv run pytest -v
+
+# Run migration and schema integrity tests
+uv run pytest tests/test_migrations.py -v
 
 # Run authorization and Casbin tests
 uv run pytest tests/test_casbin_authorization.py -v
@@ -387,6 +405,13 @@ class ProductRepository(BaseRepository[Product]):
   uv run alembic upgrade head
   ```
 </details>
+
+---
+
+## ⚖️ Architectural Notes & Known Limitations
+
+* **Multi-Worker Casbin Policy Synchronization:** The PyCasbin enforcer operates with in-memory policy caching for ultra-fast evaluations. When policies are altered or roles are assigned via `manage.py` while workers are running, worker processes must be reloaded or restarted to synchronize state, until a distributed watcher (e.g., Redis Pub/Sub) is integrated.
+* **Audit Log Immutability Guard:** Append-only immutability for audit records is enforced at the repository layer (`AuditLogRepository`). In high-security production deployments, database-level immutability (e.g., database user privilege revocation on `UPDATE`/`DELETE` or append-only SQL triggers) should be enforced directly on the database engine.
 
 ---
 

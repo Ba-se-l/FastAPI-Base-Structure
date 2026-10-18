@@ -7,8 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import BaseRepository
 from .model import RefreshSession
 
-def now()-> datetime:
-    return datetime.now(timezone.utc)
 
 class RefreshSessionRepository(BaseRepository[RefreshSession]):
     """Repository for RefreshSession CRUD and revocation operations.
@@ -37,7 +35,6 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
         """
         return await self.get_by_attr(refresh_token_jti=jti)
 
-
     async def revoke_if_active(self, jti: str) -> bool:
         """Atomically revokes a refresh session only if it is currently active.
 
@@ -51,19 +48,18 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
             True if the session was successfully revoked (affected rows > 0),
             False if it was already revoked or not found.
         """
-
+        now = datetime.now(timezone.utc)
         stmt = (
             update(RefreshSession)
             .where(
                 RefreshSession.refresh_token_jti == jti,
                 RefreshSession.is_revoked.is_(False),
             )
-            .values(is_revoked=True, revoked_at=now())
+            .values(is_revoked=True, revoked_at=now)
         )
 
         result = await self.session.execute(stmt)
         return (result.rowcount or 0) > 0
-
 
     async def revoke_by_jti(self, jti: str) -> None:
         """Revokes a single refresh session by JTI.
@@ -71,32 +67,33 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
         Args:
             jti: The JWT ID string to revoke.
         """
+        now = datetime.now(timezone.utc)
         stmt = (
             update(RefreshSession)
             .where(RefreshSession.refresh_token_jti == jti)
-            .values(is_revoked=True, revoked_at=now())
+            .values(is_revoked=True, revoked_at=now)
         )
         await self.session.execute(stmt)
 
-
-    async def revoke_family(self, family_id: str) -> int:
-        """Revokes all active refresh sessions belonging to a specific lineage family.
-
-        Used for targeted device isolation when token replay or device logout occurs.
+    async def revoke_family(self, *, family_id: str, user_id: int) -> int:
+        """Revokes all active refresh sessions of one family, strictly scoped to one user.
 
         Args:
             family_id: The lineage family identifier string.
+            user_id: Owner of the family. Rows of any other user are never touched.
 
         Returns:
             The number of revoked session records.
         """
+        now = datetime.now(timezone.utc)
         stmt = (
             update(RefreshSession)
             .where(
                 RefreshSession.family_id == family_id,
+                RefreshSession.user_id == user_id,
                 RefreshSession.is_revoked.is_(False),
             )
-            .values(is_revoked=True, revoked_at=now())
+            .values(is_revoked=True, revoked_at=now)
         )
         result = await self.session.execute(stmt)
         return result.rowcount or 0
@@ -112,13 +109,14 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
         Returns:
             The number of revoked session records.
         """
+        now = datetime.now(timezone.utc)
         stmt = (
             update(RefreshSession)
             .where(
                 RefreshSession.user_id == user_id,
                 RefreshSession.is_revoked.is_(False),
             )
-            .values(is_revoked=True, revoked_at=now())
+            .values(is_revoked=True, revoked_at=now)
         )
         result = await self.session.execute(stmt)
         return result.rowcount or 0
@@ -135,13 +133,14 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
         Returns:
             True if the family has an active, unexpired session; False otherwise.
         """
+        now = datetime.now(timezone.utc)
         stmt = (
             select(RefreshSession.id)
             .where(
                 RefreshSession.family_id == family_id,
                 RefreshSession.user_id == user_id,
                 RefreshSession.is_revoked.is_(False),
-                RefreshSession.expires_at > now(),
+                RefreshSession.expires_at > now,
             )
             .limit(1)
         )
@@ -157,12 +156,13 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
         Returns:
             A sequence of active RefreshSession instances.
         """
+        now = datetime.now(timezone.utc)
         stmt = (
             select(RefreshSession)
             .where(
                 RefreshSession.user_id == user_id,
                 RefreshSession.is_revoked.is_(False),
-                RefreshSession.expires_at > now(),
+                RefreshSession.expires_at > now,
             )
             .order_by(RefreshSession.created_at.desc())
         )

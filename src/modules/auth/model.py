@@ -4,6 +4,7 @@ Defines the RefreshSession table for server-side refresh token
 management, supporting revocation, rotation, and multi-device sessions.
 """
 
+
 import uuid
 from typing import TYPE_CHECKING
 from datetime import datetime
@@ -64,7 +65,7 @@ class RefreshSession(Base, DateTimeMixin):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    
+
     family_id: Mapped[str] = mapped_column(
         String(64), nullable=False, index=True, default=lambda: uuid.uuid4().hex
     )

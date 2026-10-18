@@ -32,6 +32,7 @@ This directory contains the database schema migration scripts and environment co
    - [Option 1: Complete Schema Teardown and Rebuild via Alembic (Recommended)](#option-1-complete-schema-teardown-and-rebuild-via-alembic-recommended)
    - [Option 2: Physical Database File Removal (Local SQLite Dev Environments)](#option-2-physical-database-file-removal-local-sqlite-dev-environments)
    - [Option 3: Data Purging Without Schema Destruction (DML Purge / Truncate)](#option-3-data-purging-without-schema-destruction-dml-purge--truncate)
+
 ---
 
 ## 1. Architecture & Design Principles
@@ -75,6 +76,10 @@ uv run alembic upgrade head
 INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
 INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
 INFO  [alembic.runtime.migration] Running upgrade  -> 023d924aba69, initial_schema
+INFO  [alembic.runtime.migration] Running upgrade 023d924aba69 -> bce235971d47, standardize_constraint_naming_conventions
+INFO  [alembic.runtime.migration] Running upgrade bce235971d47 -> 1481b1cdf6a4, add_casbin_rule_table
+INFO  [alembic.runtime.migration] Running upgrade 1481b1cdf6a4 -> f2001b0d2995, audit_log_limits_and_multi_sink
+INFO  [alembic.runtime.migration] Running upgrade f2001b0d2995 -> 6aa8f9bfed61, fix_legacy_family_id_and_bump_security_version
 ```
 
 ### Step 4: Verify Database State
@@ -83,10 +88,10 @@ uv run alembic current
 ```
 **Expected Output:**
 ```text
-023d924aba69 (head)
+6aa8f9bfed61 (head)
 ```
 
-Your database is now fully initialized with all tables (`users`, `refresh_sessions`, `audit_logs`), primary keys, indexes, and foreign keys.
+Your database is now fully initialized with all tables (`users`, `refresh_sessions`, `audit_logs`, `casbin_rule`), primary keys, indexes, and foreign keys.
 
 ---
 
@@ -169,6 +174,16 @@ uv run alembic history --verbose
 ```
 * **Shows:** Revision hash, parent revision, author, date, and descriptive commit message.
 
+#### Repository Revision Lineage
+
+| Revision Hash | Parent Revision | Description & Architectural Scope |
+| :--- | :--- | :--- |
+| `023d924aba69` | *None (base)* | Initial core schema (`users`, `refresh_sessions`, `audit_logs`) |
+| `bce235971d47` | `023d924aba69` | Standardize constraint naming conventions (`ix_`, `uq_`, `ck_`, `fk_`, `pk_`) |
+| `1481b1cdf6a4` | `bce235971d47` | Add `casbin_rule` storage table for dynamic RBAC authorization |
+| `f2001b0d2995` | `1481b1cdf6a4` | Audit log schema limits hardening & multi-sink telemetry |
+| `6aa8f9bfed61` | `f2001b0d2995` | **(head)** Fix legacy family ID isolation & bump security version |
+
 ---
 
 ### `alembic heads` — Inspect Branch Heads
@@ -201,7 +216,7 @@ uv run alembic stamp head
 
 ## 4. Internal Plumbing & Architectural Wiring (`env.py`)
 
-The migration environment is driven by [`migrations/env.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/migrations/env.py). Here is how it is structured:
+The migration environment is driven by [`migrations/env.py`](env.py). Here is how it is structured:
 
 ### Dynamic Settings & Connection Pool
 Instead of hardcoding database credentials in `alembic.ini`, `env.py` reads directly from application settings:
@@ -228,7 +243,7 @@ target_metadata = BaseModel.metadata
 > If you create a new ORM model in a new module and forget to import it in `migrations/env.py`, Alembic will **not** detect the table during `--autogenerate`!
 
 ### Constraint Naming Conventions
-Alembic requires predictable constraint names to drop or alter foreign keys, unique constraints, and indexes. In [`src/database/base.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/src/database/base.py), `BaseModel` defines:
+Alembic requires predictable constraint names to drop or alter foreign keys, unique constraints, and indexes. In [`src/database/base.py`](../src/database/base.py), `BaseModel` defines:
 ```python
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
@@ -394,6 +409,9 @@ During development, CI/CD cycles, or system resets, engineers frequently need to
 
 ### Option 1: Complete Schema Teardown and Rebuild via Alembic (Recommended)
 
+> [!CAUTION]
+> **DESTRUCTIVE DDL OPERATION:** Running `alembic downgrade base` rolls back all migrations, dropping all tables, relationships, and stored records permanently. **NEVER** execute this command on production or shared staging environments without an offline, verified database backup.
+
 This approach strictly relies on Alembic's version tree to roll back all migrations to the initial clean state (`base`), and then reapplies them from zero:
 
 1. **Tear down all tables and revert migrations:**
@@ -415,6 +433,9 @@ This approach strictly relies on Alembic's version tree to roll back all migrati
 ---
 
 ### Option 2: Physical Database File Removal (Local SQLite Dev Environments)
+
+> [!CAUTION]
+> **PERMANENT FILE REMOVAL:** Physically deleting `database.db` immediately purges all schema definitions, versions, and application data without recovery. This procedure is strictly confined to local isolated developer machines and is forbidden in staging or production environments.
 
 For local development where SQLite is configured as a local file (`database.db`), you can rapidly destroy and recreate the database file:
 
@@ -481,3 +502,4 @@ async def purge_all_data() -> None:
 if __name__ == "__main__":
     asyncio.run(purge_all_data())
 ```
+

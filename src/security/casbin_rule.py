@@ -1,8 +1,8 @@
 from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-
 from src.database import BaseModel as Base
+
 
 class CasbinRule(Base):
     """Persistent storage row for a single Casbin policy or grouping line.
@@ -37,8 +37,6 @@ class CasbinRule(Base):
     v3: Mapped[str | None] = mapped_column(String(255), nullable=True)
     v4: Mapped[str | None] = mapped_column(String(255), nullable=True)
     v5: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-
 
     def __str__(self) -> str:
         """Serializes the rule line for Casbin's load_policy parser.

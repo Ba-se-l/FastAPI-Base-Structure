@@ -1,5 +1,13 @@
+import uuid
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.modules.auth.model import RefreshSession
+from src.modules.auth.repo import RefreshSessionRepository
+from src.security import decode_access_token
 
 
 @pytest.mark.asyncio
@@ -281,3 +289,115 @@ async def test_logout_all_instantly_invalidates_all_devices(client: AsyncClient)
     d2_ref = await client.post('/api/v1/auth/refresh', json={'refresh_token': d2_refresh})
     assert d2_ref.status_code == 401
     assert d2_ref.json()['error']['code'] == 'TOKEN_REVOKED'
+
+
+@pytest.mark.asyncio
+async def test_revoke_family_is_user_scoped(db_session: AsyncSession):
+    """Verifies that revoke_family only revokes sessions belonging to the specified user."""
+    repo = RefreshSessionRepository(session=db_session)
+    family_shared = 'fam-scope-test-123'
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(days=7)
+
+    # Create session for User 101
+    s1 = RefreshSession(
+        user_id=101,
+        refresh_token_jti=uuid.uuid4().hex,
+        family_id=family_shared,
+        is_revoked=False,
+        expires_at=exp,
+    )
+    # Create session for User 102 with identical family_id (e.g. legacy state)
+    s2 = RefreshSession(
+        user_id=102,
+        refresh_token_jti=uuid.uuid4().hex,
+        family_id=family_shared,
+        is_revoked=False,
+        expires_at=exp,
+    )
+    db_session.add_all([s1, s2])
+    await db_session.flush()
+
+    # User 999 attempts to revoke family
+    revoked_count = await repo.revoke_family(family_id=family_shared, user_id=999)
+    assert revoked_count == 0
+
+    await db_session.refresh(s1)
+    await db_session.refresh(s2)
+    assert s1.is_revoked is False
+    assert s2.is_revoked is False
+
+    # Revoking with user_id=101 should only revoke s1
+    revoked_count = await repo.revoke_family(family_id=family_shared, user_id=101)
+    assert revoked_count == 1
+
+    await db_session.refresh(s1)
+    await db_session.refresh(s2)
+    assert s1.is_revoked is True
+    assert s2.is_revoked is False
+
+
+@pytest.mark.asyncio
+async def test_logout_and_replay_do_not_touch_other_users(client: AsyncClient, db_session: AsyncSession):
+    """Verifies that logout and replay detection for User A never revoke User B's sessions."""
+    # Register User A and User B
+    u_a = {'name': 'User A', 'email': 'usera@enterprise.io', 'password': 'StrongP@ssw0rd!A'}
+    u_b = {'name': 'User B', 'email': 'userb@enterprise.io', 'password': 'StrongP@ssw0rd!B'}
+    await client.post('/api/v1/auth/register', json=u_a)
+    await client.post('/api/v1/auth/register', json=u_b)
+
+    # Login both
+    login_a = (await client.post('/api/v1/auth/login', json={'email': u_a['email'], 'password': u_a['password']})).json()
+    login_b = (await client.post('/api/v1/auth/login', json={'email': u_b['email'], 'password': u_b['password']})).json()
+
+    ref_a1 = login_a['refresh_token']
+    ref_b = login_b['refresh_token']
+
+    # User A rotates token once: ref_a1 is now stale
+    rot_a = (await client.post('/api/v1/auth/refresh', json={'refresh_token': ref_a1})).json()
+    ref_a2 = rot_a['refresh_token']
+
+    # User A replays stale ref_a1 -> triggers replay attack detection and family revocation
+    replay_resp = await client.post('/api/v1/auth/refresh', json={'refresh_token': ref_a1})
+    assert replay_resp.status_code == 401
+
+    # User A's new token ref_a2 is now revoked due to replay
+    stale_a = await client.post('/api/v1/auth/refresh', json={'refresh_token': ref_a2})
+    assert stale_a.status_code == 401
+
+    # User B's token MUST still be active and valid
+    rot_b = await client.post('/api/v1/auth/refresh', json={'refresh_token': ref_b})
+    assert rot_b.status_code == 200
+
+    # User B logs out
+    new_ref_b = rot_b.json()['refresh_token']
+    logout_b = await client.post('/api/v1/auth/logout', json={'refresh_token': new_ref_b})
+    assert logout_b.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_issued_access_tokens_carry_fid(client: AsyncClient):
+    """Verifies that all access tokens issued by login and refresh endpoints carry a non-empty fid claim."""
+    user = {'name': 'Fid User', 'email': 'fid.user@enterprise.io', 'password': 'StrongP@ssw0rd!F'}
+    await client.post('/api/v1/auth/register', json=user)
+
+    login_resp = await client.post('/api/v1/auth/login', json={'email': user['email'], 'password': user['password']})
+    assert login_resp.status_code == 200
+    tokens = login_resp.json()
+
+    # Verify access token has non-empty fid
+    access_payload = decode_access_token(tokens['access_token'])
+    assert access_payload.fid is not None
+    assert len(access_payload.fid) > 0
+
+    # Refresh and verify rotated access token also carries fid
+    ref_resp = await client.post('/api/v1/auth/refresh', json={'refresh_token': tokens['refresh_token']})
+    assert ref_resp.status_code == 200
+    new_tokens = ref_resp.json()
+
+    new_access_payload = decode_access_token(new_tokens['access_token'])
+    assert new_access_payload.fid is not None
+    assert len(new_access_payload.fid) > 0
+    # Lineage: family_id must be inherited across rotations
+    assert new_access_payload.fid == access_payload.fid
+

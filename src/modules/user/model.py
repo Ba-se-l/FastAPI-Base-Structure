@@ -18,6 +18,7 @@ class User(Base, DateTimeMixin):
         name: Full display name of the user.
         email: Unique user email address for authentication.
         hashed_password: Salted and hashed password string.
+        security_version: Version of the user's security settings.
         role: Access control role (admin or user).
         is_active: Whether the account is active.
         refresh_sessions: Associated active refresh sessions.

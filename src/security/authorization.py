@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 import logging
 from pathlib import Path
 

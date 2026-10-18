@@ -32,6 +32,7 @@
    - [الخيار الأول: التراجع المعماري الكامل وإعادة البناء عبر Alembic (الموصى به)](#الخيار-الأول-التراجع-المعماري-الكامل-وإعادة-البناء-عبر-alembic-الموصى-به)
    - [الخيار الثاني: الحذف الفيزيائي الفوري لملف قاعدة البيانات (بيئة التطوير SQLite)](#الخيار-الثاني-الحذف-الفيزيائي-الفوري-لملف-قاعدة-البيانات-بيئة-التطوير-sqlite)
    - [الخيار الثالث: تصفير وتفريغ البيانات دون هدم الجداول (DML Purging / Truncate)](#الخيار-الثالث-تصفير-وتفريغ-البيانات-دون-هدم-الجداول-dml-purging--truncate)
+
 ---
 
 ## 1. المعمارية والمبادئ الهندسية الأساسية
@@ -44,7 +45,7 @@
 1. **التحكم بالإصدارات لـ DDL:** كل تعديل هيكلي يُكتب داخل ملف بايثون مؤرخ ومفهرس برمز تجزئة (Hash) فريد في مجلد `migrations/versions/`.
 2. **قابلية التراجع التام (Reversibility):** كل ترحيل يحوي دالتين: `upgrade()` لتطبيق التغيير للأمام، و `downgrade()` للتراجع عن التغيير بأمان تام.
 3. **دعم كامل للعمليات غير المتزامنة (100% Async Native):** مهيأ عبر `async_engine_from_config` ليتوافق بسلاسة مع `aiosqlite` (الافتراضي للتطوير) و `asyncpg` (لقواعد بيانات PostgreSQL في الإنتاج).
-4. **ربط ديناميكي بدون تكرار إعدادات:** لا يتم كتابة رابط قاعدة البيانات نهائياً في `alembic.ini`، بل يتم حقنه برمجياً من إعدادات المشروع [src.settings.settings.database_url](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/src/settings/settings.py).
+4. **ربط ديناميكي بدون تكرار إعدادات:** لا يتم كتابة رابط قاعدة البيانات نهائياً في `alembic.ini`، بل يتم حقنه برمجياً من إعدادات المشروع [src.settings.settings.database_url](../src/settings/settings.py).
 
 ---
 
@@ -75,6 +76,10 @@ uv run alembic upgrade head
 INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
 INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
 INFO  [alembic.runtime.migration] Running upgrade  -> 023d924aba69, initial_schema
+INFO  [alembic.runtime.migration] Running upgrade 023d924aba69 -> bce235971d47, standardize_constraint_naming_conventions
+INFO  [alembic.runtime.migration] Running upgrade bce235971d47 -> 1481b1cdf6a4, add_casbin_rule_table
+INFO  [alembic.runtime.migration] Running upgrade 1481b1cdf6a4 -> f2001b0d2995, audit_log_limits_and_multi_sink
+INFO  [alembic.runtime.migration] Running upgrade f2001b0d2995 -> 6aa8f9bfed61, fix_legacy_family_id_and_bump_security_version
 ```
 
 ### الخطوة 4: التحقق من إصدار القاعدة الحالي
@@ -83,10 +88,10 @@ uv run alembic current
 ```
 **المخرج المتوقع:**
 ```text
-023d924aba69 (head)
+6aa8f9bfed61 (head)
 ```
 
-أصبحت قاعدة بياناتك الآن مهيأة بالكامل وتحتوي على جميع الجداول الأساسية (`users`, `refresh_sessions`, `audit_logs`) والفهارس والقيود.
+أصبحت قاعدة بياناتك الآن مهيأة بالكامل وتحتوي على جميع الجداول الأساسية (`users`, `refresh_sessions`, `audit_logs`, `casbin_rule`) والفهارس والقيود.
 
 ---
 
@@ -171,6 +176,16 @@ uv run alembic history --verbose
 ```
 * يوضح: رمز التجزئة، الترحيل الأب السابق، التاريخ، ووصف التعديل.
 
+#### التسلسل الزمني لملفات الهجرة في المستودع
+
+| رمز التجزئة (Revision) | الإصدار الأب (Parent) | الوصف والنطاق المعماري |
+| :--- | :--- | :--- |
+| `023d924aba69` | *لا يوجد (base)* | المخطط التأسيسي الأولي للجداول (`users`, `refresh_sessions`, `audit_logs`) |
+| `bce235971d47` | `023d924aba69` | توحيد وضبط معايير تسمية القيود والفهارس (`ix_`, `uq_`, `ck_`, `fk_`, `pk_`) |
+| `1481b1cdf6a4` | `bce235971d47` | إضافة جدول `casbin_rule` لتخزين سياسات وأذونات الصلاحيات الديناميكية |
+| `f2001b0d2995` | `1481b1cdf6a4` | تحصين سعة أعمدة سجلات التدقيق وتطوير المصاب المزدوجة |
+| `6aa8f9bfed61` | `f2001b0d2995` | **(head)** عزل عائلة الجلسات وتحديث عداد الحماية الأمنية |
+
 ---
 
 ### `alembic heads` — فحص رؤوس الفروع المتشعبة
@@ -202,7 +217,7 @@ uv run alembic stamp head
 
 ## 4. التشريح المعماري للبيئة غير المتزامنة (`migrations/env.py`)
 
-الملف الحاكم لعملية الترحيل بأكملها هو [`migrations/env.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/migrations/env.py). وإليك تفاصيل تصميمه:
+الملف الحاكم لعملية الترحيل بأكملها هو [`migrations/env.py`](env.py). وإليك تفاصيل تصميمه:
 
 ### الربط الديناميكي مع الإعدادات ومجمع الاتصال
 بدلاً من تثبيت بيانات الاتصال يدوياً، يقرأ الملف الرابط من كائن الإعدادات الموحد:
@@ -229,7 +244,7 @@ target_metadata = BaseModel.metadata
 > إذا أنشأت موديولاً جديداً أو جدولاً جديداً ونسيت استيراد النموذج داخل `migrations/env.py`، فلن يكتشف Alembic الجدول الجديد إطلاقاً أثناء التوليد التلقائي!
 
 ### معايير تسمية القيود الصارمة (Naming Conventions)
-يحتاج Alembic إلى أسماء قيود وفهارس واضحة وثابتة ليتمكن من حذفها أو تعديلها مستقبلاً بدون أخطاء. في ملف [`src/database/base.py`](file:///d:/_Python%20Projects-27-05-2026/fastapi-base-structure-dev/src/database/base.py)، تم تزويد `BaseModel` بهذه المعايير:
+يحتاج Alembic إلى أسماء قيود وفهارس واضحة وثابتة ليتمكن من حذفها أو تعديلها مستقبلاً بدون أخطاء. في ملف [`src/database/base.py`](../src/database/base.py)، تم تزويد `BaseModel` بهذه المعايير:
 ```python
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
@@ -392,6 +407,9 @@ context.configure(
 
 ### الخيار الأول: التراجع المعماري الكامل وإعادة البناء عبر Alembic (الموصى به)
 
+> [!CAUTION]
+> **تحذير: عملية تدميرية للمخطط والبيانات:** يؤدي تنفيذ `alembic downgrade base` إلى التراجع عن كافة الهجرات وإسقاط الجداول والعلاقات والبيانات بالكامل وبشكل لا رجعة فيه. **يُحظر تماماً** تنفيذ هذا الأمر على قواعد بيانات الإنتاج أو البيئات المشتركة دون وجود نسخة احتياطية معزولة ومختبرة مسبقاً.
+
 هذا المسار يعتمد حصراً على محرك ترحيل الإصدارات للتراجع عن كافة الترحيلات إلى نقطة البداية الصفرية (`base`)، ثم إعادة تطبيقها من جديد:
 
 1. **إرجاع كافة الجداول وإلغاء المخططات التراكمية:**
@@ -413,6 +431,9 @@ context.configure(
 ---
 
 ### الخيار الثاني: الحذف الفيزيائي الفوري لملف قاعدة البيانات (بيئة التطوير SQLite)
+
+> [!CAUTION]
+> **إبادة فيزيائية تامة للملف:** يؤدي حذف ملف `database.db` إلى ضياع كافة الهياكل والبيانات فورياً دون أي إمكانية للاسترجاع. هذا الإجراء مخصص حصراً لبيئة التطوير المحلية لجهاز المطور، ويُمنع منعاً باتاً تطبيقه على وحدات التخزين في بيئات الإنتاج أو الخوادم السحابية.
 
 في بيئات التطوير المحلية حيث يُستخدم SQLite كملف محلي (`database.db`)، يمكن إبادة القاعدة وإعادة إنشائها بثوانٍ:
 
@@ -480,3 +501,4 @@ async def purge_all_data() -> None:
 if __name__ == "__main__":
     asyncio.run(purge_all_data())
 ```
+

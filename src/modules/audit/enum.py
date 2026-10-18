@@ -41,6 +41,7 @@ class LogAction(StrEnum):
     AUTH_PASSWORD_CHANGED = 'AUTH_PASSWORD_CHANGED'
     """User credentials were updated and sessions invalidated."""
 
+
     USER_REGISTERED = 'USER_REGISTERED'
     """New user account was provisioned."""
 

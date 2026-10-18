@@ -1,9 +1,45 @@
+import ipaddress
 from typing import Any
 from sqlalchemy.orm import DeclarativeBase
 from fastapi import Request
 from fastapi.encoders import jsonable_encoder
 
+from src.settings import settings
+from .limits import AUDIT_USER_AGENT_MAX
 from .schemas import AuditContext, AuditContextDict
+
+
+def _is_trusted_proxy(host: str) -> bool:
+    """Returns True if host is inside any configured trusted proxy network."""
+    if not settings.trusted_proxies:
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    for net_str in settings.trusted_proxies:
+        try:
+            if ip in ipaddress.ip_network(net_str, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def resolve_client_ip(request: Request) -> str | None:
+    """Resolves the client IP, honouring X-Forwarded-For only from trusted proxies."""
+    peer = request.client.host if request.client else None
+    if not (settings.trust_proxy_headers and peer and _is_trusted_proxy(peer)):
+        return peer
+    chain = [p.strip() for p in request.headers.get('x-forwarded-for', '').split(',') if p.strip()]
+    for raw in reversed(chain):
+        try:
+            ip = str(ipaddress.ip_address(raw))
+        except ValueError:
+            return peer  # malformed chain -> distrust entirely
+        if not _is_trusted_proxy(ip):
+            return ip
+    return peer
 
 
 def get_extra_dict_for_updates(
@@ -47,13 +83,11 @@ def get_audit_context(request: Request) -> AuditContext:
     Returns:
         Immutable AuditContext data class populated from request headers and state.
     """
-    forwarded_for = request.headers.get('X-Forwarded-For')
-    if forwarded_for:
-        ip = forwarded_for.split(',')[0].strip()
-    else:
-        ip = request.client.host if request.client else None
-
+    ip = resolve_client_ip(request)
     ua = request.headers.get('user-agent')
+    if ua is not None:
+        ua = ua[:AUDIT_USER_AGENT_MAX]
+
     req_id = getattr(request.state, 'request_id', None)
 
     return AuditContext(
@@ -61,6 +95,7 @@ def get_audit_context(request: Request) -> AuditContext:
         user_agent=ua,
         request_id=req_id,
     )
+
 
 
 def get_audit_context_dict(ctx: AuditContext | None = None) -> AuditContextDict:

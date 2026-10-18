@@ -5,6 +5,7 @@ from .repo import AuditLogRepository
 from .router import router
 from .schemas import LogEvent, LogExportParams, LogQueryFilter, LogResponse
 from .service import (
+    drain_background_tasks,
     export_audit_logs,
     get_user_audit_logs,
     log_event,
@@ -23,6 +24,7 @@ __all__ = (
     'LogQueryFilter',
     'LogResponse',
     'LogSeverity',
+    'drain_background_tasks',
     'export_audit_logs',
     'get_user_audit_logs',
     'log_event',

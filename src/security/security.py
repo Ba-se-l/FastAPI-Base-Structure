@@ -11,6 +11,7 @@ from ..settings import settings
 
 ph = PasswordHash.recommended()
 
+
 SECURITY_PASSWORD_HASH: str = ph.hash("anti-timing-dummy-secret-fixed-entropy")
 """Pre-computed dummy argon2 hash constant used to equalize response latency during invalid login attempts."""
 
@@ -39,6 +40,7 @@ def verify_password(password: str, hashed_password: str) -> bool:
     """
     return ph.verify(password=password, hash=hashed_password)
 
+
 def verify_and_update(password: str, hashed_password: str) -> tuple[bool, str | None]:
     """Verifies a plaintext password and checks if the hash needs upgrading.
 
@@ -52,12 +54,11 @@ def verify_and_update(password: str, hashed_password: str) -> tuple[bool, str | 
     return ph.verify_and_update(password=password, hash=hashed_password)
 
 
-
 def create_access_token(
     user_id: int,
     security_version: int = 1,
     family_id: str | None = None,
-    expires_delta: timedelta | None = None
+    expires_delta: timedelta | None = None,
 ) -> str:
     """Generates a signed JWT access token for authentication.
 
@@ -66,7 +67,6 @@ def create_access_token(
         security_version: Current credential/security version of the user.
         family_id: Optional session family lineage identifier.
         expires_delta: Optional custom duration before expiration. Defaults to settings value.
-
 
     Returns:
         A signed JWT access token string.
@@ -81,7 +81,7 @@ def create_access_token(
         type=TokenType.ACCESS,
         jti=uuid.uuid4().hex,
         iat=now,
-        security_version=security_version,
+        sec_ver=security_version,
         exp=now + expires_delta,
         fid=family_id,
     )
@@ -96,12 +96,12 @@ def create_access_token(
 def create_refresh_token(
     user_id: int,
     family_id: str | None = None,
-    jti: str | None = None
+    jti: str | None = None,
 ) -> tuple[str, str]:
     """Generates a signed JWT refresh token with an assigned unique JTI identifier.
 
     Args:
-        user: The authenticated user.
+        user_id: The primary key of the authenticated user.
         family_id: Optional session family lineage identifier.
         jti: Optional pre-assigned JWT ID string. If None, a random UUID hex is generated.
 
@@ -119,12 +119,11 @@ def create_refresh_token(
         type=TokenType.REFRESH,
         jti=jti,
         iat=now,
-        security_version=1,
+        sec_ver=1,
         exp=now + expires_delta,
         fid=family_id,
     )
 
-    
     return jwt.encode(
         payload.model_dump(exclude_none=True),
         key=settings.refresh_secret_key,

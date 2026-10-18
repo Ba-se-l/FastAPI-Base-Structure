@@ -3,10 +3,11 @@ from .base import (
     NotFoundException,
     AlreadyExistsException,
     AccessDeniedException,
+    PermissionDeniedException,
     InvalidCredentialsException,
     InactiveEntityException,
     TokenRevokedException,
-    TokenStaleException
+    TokenStaleException,
 )
 
 __all__ = (
@@ -14,6 +15,7 @@ __all__ = (
     'NotFoundException',
     'AlreadyExistsException',
     'AccessDeniedException',
+    'PermissionDeniedException',
     'InvalidCredentialsException',
     'InactiveEntityException',
     'TokenRevokedException',

@@ -11,7 +11,7 @@ from src.database.base import BaseModel
 from src.modules.user.model import User  # noqa: F401
 from src.modules.auth.model import RefreshSession  # noqa: F401
 from src.modules.audit.model import AuditLog  # noqa: F401
-from src.security.casbin_rule import CasbinRule # noqa: F401
+from src.security.casbin_rule import CasbinRule  # noqa: F401
 from src.settings import settings
 
 # this is the Alembic Config object, which provides
