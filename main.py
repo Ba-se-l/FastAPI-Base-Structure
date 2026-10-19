@@ -5,11 +5,14 @@ import logging
 import re
 import uuid
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -297,6 +300,21 @@ async def readiness() -> JSONResponse:
 
 # Include the master API router
 app.include_router(api_router)
+
+
+# Static files and UI Workbench mount
+static_dir = Path(__file__).resolve().parent / "static"
+if not static_dir.exists():
+    static_dir.mkdir(parents=True, exist_ok=True)
+
+
+@app.get("/ui", include_in_schema=False)
+async def ui_redirect() -> RedirectResponse:
+    """Redirects /ui to /ui/ to ensure relative asset paths resolve correctly."""
+    return RedirectResponse(url="/ui/")
+
+
+app.mount("/ui", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 
 if __name__ == '__main__':

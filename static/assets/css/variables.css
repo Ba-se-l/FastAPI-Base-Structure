@@ -1,0 +1,71 @@
+/* ==========================================================================
+   Enterprise Design Tokens & Theme Variables
+   High-Contrast Dark Console Aesthetic (GitHub / Linear / Datadog Inspired)
+   ========================================================================== */
+
+:root {
+    /* Color Palette - Neutrals */
+    --bg-canvas: #090d16;
+    --bg-surface: #0f172a;
+    --bg-surface-elevated: #1e293b;
+    --bg-surface-active: #283548;
+    --bg-card: rgba(15, 23, 42, 0.75);
+    --bg-card-border: rgba(148, 163, 184, 0.12);
+    --bg-card-border-hover: rgba(148, 163, 184, 0.28);
+    
+    /* Typography Colors */
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-inverse: #090d16;
+    
+    /* Semantic Colors */
+    --accent-primary: #38bdf8;
+    --accent-primary-hover: #0ea5e9;
+    --accent-primary-glow: rgba(56, 189, 248, 0.25);
+    
+    --accent-success: #10b981;
+    --accent-success-hover: #059669;
+    --accent-success-glow: rgba(16, 185, 129, 0.25);
+    
+    --accent-warning: #f59e0b;
+    --accent-warning-hover: #d97706;
+    --accent-warning-glow: rgba(245, 158, 11, 0.25);
+    
+    --accent-danger: #ef4444;
+    --accent-danger-hover: #dc2626;
+    --accent-danger-glow: rgba(239, 68, 68, 0.25);
+
+    --accent-purple: #a855f7;
+    --accent-purple-glow: rgba(168, 85, 247, 0.25);
+    
+    --accent-cyan: #06b6d4;
+
+    /* Status Badges */
+    --badge-200-bg: rgba(16, 185, 129, 0.15);
+    --badge-200-text: #34d399;
+    --badge-401-bg: rgba(245, 158, 11, 0.15);
+    --badge-401-text: #fbbf24;
+    --badge-403-bg: rgba(239, 68, 68, 0.15);
+    --badge-403-text: #f87171;
+    --badge-422-bg: rgba(168, 85, 247, 0.15);
+    --badge-422-text: #c084fc;
+    --badge-500-bg: rgba(239, 68, 68, 0.25);
+    --badge-500-text: #fca5a5;
+
+    /* Fonts & Radii */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, 'Courier New', monospace;
+    
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-full: 9999px;
+
+    /* Shadows & Transitions */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.6);
+    --transition-fast: 0.15s ease;
+    --transition-base: 0.25s ease;
+}

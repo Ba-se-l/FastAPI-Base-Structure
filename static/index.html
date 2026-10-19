@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastAPI Enterprise API Workbench & Testing Console</title>
+    <!-- Base tag ensures zero path breakage under /ui and /ui/ -->
+    <base href="/ui/">
+    <link rel="stylesheet" href="/ui/assets/css/variables.css">
+    <link rel="stylesheet" href="/ui/assets/css/layout.css">
+    <link rel="stylesheet" href="/ui/assets/css/components.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Telemetry & Context Bar -->
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <div class="brand-badge">
+                    <span class="logo-icon">⚡</span>
+                    <span>Enterprise API Workbench</span>
+                </div>
+                <div class="server-health-indicator" id="top-server-indicator" title="Live ping to /health">
+                    <span class="status-dot online" id="top-health-dot"></span>
+                    <span id="top-health-text">FastAPI Engine: Online</span>
+                </div>
+            </div>
+
+            <div class="top-bar-center">
+                <!-- Multi-Device Switcher Header -->
+                <div class="device-switcher" title="Active client slot for outbound HTTP calls">
+                    <button class="device-tab active" id="top-device-a" data-slot="device_a">📱 Device A</button>
+                    <button class="device-tab" id="top-device-b" data-slot="device_b">📱 Device B</button>
+                </div>
+
+                <!-- Custom X-Request-ID Injection Input -->
+                <div class="request-id-override-wrapper" title="Override correlation ID sent in X-Request-ID header">
+                    <label for="input-custom-request-id">X-Request-ID:</label>
+                    <input type="text" id="input-custom-request-id" placeholder="Auto UUID (or type custom)">
+                </div>
+            </div>
+
+            <div class="top-bar-right">
+                <div class="user-session-chip" id="top-user-session-chip">
+                    <span id="top-user-label">Anonymous</span>
+                </div>
+                <button class="btn btn-sm btn-secondary" id="inspector-toggle-btn" title="Toggle Live Network Inspector">
+                    📡 Network Inspector (<span id="inspector-count-badge">0</span>)
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Body: Sidebar + Workspace -->
+        <div class="main-body">
+            <!-- Sidebar Navigation -->
+            <aside class="sidebar">
+                <div class="nav-group">
+                    <div class="nav-heading">Platform Modules</div>
+                    <a class="nav-item active" data-tab="health" id="tab-health">
+                        <span class="nav-icon">⚡</span>
+                        <span>Health & Telemetry</span>
+                    </a>
+                    <a class="nav-item" data-tab="auth" id="tab-auth">
+                        <span class="nav-icon">🔑</span>
+                        <span>Auth & Devices</span>
+                    </a>
+                    <a class="nav-item" data-tab="user" id="tab-user">
+                        <span class="nav-icon">👥</span>
+                        <span>User & RBAC</span>
+                    </a>
+                    <a class="nav-item" data-tab="audit" id="tab-audit">
+                        <span class="nav-icon">📜</span>
+                        <span>Audit Trail</span>
+                    </a>
+                    <a class="nav-item" data-tab="security-lab" id="tab-security-lab">
+                        <span class="nav-icon">🛡️</span>
+                        <span>Security Lab</span>
+                    </a>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-heading">Documentation</div>
+                    <a href="/docs" target="_blank" class="nav-item">
+                        <span class="nav-icon">📖</span>
+                        <span>Swagger OpenAPI</span>
+                    </a>
+                    <a href="/redoc" target="_blank" class="nav-item">
+                        <span class="nav-icon">📑</span>
+                        <span>ReDoc Console</span>
+                    </a>
+                </div>
+            </aside>
+
+            <!-- Center Interactive Viewport -->
+            <main class="viewport-content" id="workspace-viewport">
+                <!-- Dynamically populated by app.js -->
+            </main>
+        </div>
+
+        <!-- Collapsible Bottom Network Inspector Drawer -->
+        <div class="inspector-drawer collapsed" id="network-inspector-drawer">
+            <div class="inspector-header" id="inspector-drawer-header">
+                <div class="inspector-title">
+                    <span>📡 Live Network Inspector</span>
+                    <span class="badge badge-info" id="inspector-title-badge">0 requests</span>
+                </div>
+                <div class="inspector-actions">
+                    <div class="btn-group">
+                        <button class="btn btn-xs btn-outline inspector-filter-btn active" data-filter="all">All</button>
+                        <button class="btn btn-xs btn-outline inspector-filter-btn" data-filter="2xx">2xx</button>
+                        <button class="btn btn-xs btn-outline inspector-filter-btn" data-filter="4xx">4xx</button>
+                        <button class="btn btn-xs btn-outline inspector-filter-btn" data-filter="5xx">5xx</button>
+                    </div>
+                    <button class="btn btn-xs btn-outline" id="inspector-clear-btn">Clear</button>
+                    <button class="btn btn-xs btn-secondary" id="inspector-close-btn">▲ Expand</button>
+                </div>
+            </div>
+            <div class="inspector-body">
+                <div class="inspector-pane" id="inspector-tx-list">
+                    <div class="empty-state-small">No network transactions yet</div>
+                </div>
+                <div class="inspector-pane" id="inspector-tx-detail">
+                    <div class="empty-state">Select a transaction on the left to inspect headers and body</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Root -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- ES6 Module Bootloader -->
+    <script type="module" src="/ui/js/app.js"></script>
+</body>
+</html>
